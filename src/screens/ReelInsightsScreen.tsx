@@ -125,7 +125,9 @@ const ReelInsightsScreen = () => {
     }
     return fallbackPost?.thumbnail;
   };
-  const postImage = getPostImage();
+  const [postImage, setPostImage] = useState(getPostImage());
+  const [postVideoUrl, setPostVideoUrl] = useState(post?.videoUrl || "");
+  const [postCaption, setPostCaption] = useState(post?.caption || "❤️🤍...");
 
   // Get insights data
   const ins = post?.insights || null;
@@ -200,6 +202,18 @@ const ReelInsightsScreen = () => {
     return dates[2];
   });
   const [timeRangeMode, setTimeRangeMode] = useState<"custom" | "12h" | "24h">("custom");
+  const [showGraph, setShowGraph] = useState(post?.showGraph !== false);
+  const [editCountries, setEditCountries] = useState(ins?.countries || [
+    { name: "India", pct: 54.1 }, { name: "Iran", pct: 19.9 }, { name: "Uzbekistan", pct: 5.7 }, { name: "Türkiye", pct: 2.6 }, { name: "Kazakhstan", pct: 1.6 },
+  ]);
+  const [editAgeGroups, setEditAgeGroups] = useState(ins?.ageGroups || [
+    { range: "13-17", pct: 32.3 }, { range: "18-24", pct: 35.9 }, { range: "25-34", pct: 20.2 }, { range: "35-44", pct: 7.1 }, { range: "45-54", pct: 2.3 }, { range: "55-64", pct: 0.8 }, { range: "65+", pct: 1.4 },
+  ]);
+  const [editSources, setEditSources] = useState(ins?.sources || [
+    { name: "Feed", pct: 63.4 }, { name: "Reels tab", pct: 11.1 }, { name: "Stories", pct: 10.6 }, { name: "Explore", pct: 7.4 }, { name: "Profile", pct: 6.0 },
+  ]);
+  const [editAccountsReached, setEditAccountsReached] = useState(ins?.accountsReached ?? 567);
+  const [editFollows, setEditFollows] = useState(ins?.follows ?? 0);
 
   // ── Supabase: save all editable state ──────────────────────────────────────
   const saveToSupabase = useCallback(async (overrides?: Record<string, unknown>) => {
@@ -219,6 +233,12 @@ const ReelInsightsScreen = () => {
       editTypicalTop,
       xDate1: editXDate1, xDate2: editXDate2, xDate3: editXDate3,
       timeRangeMode,
+      showGraph,
+      sources: editSources,
+      countries: editCountries,
+      ageGroups: editAgeGroups,
+      accountsReached: editAccountsReached,
+      follows: editFollows,
       ...overrides,
     };
     await (supabase as any).from('reels_data').upsert(
@@ -232,7 +252,8 @@ const ReelInsightsScreen = () => {
     editWatchTime, editAvgWatchTime,
     editSkipRate, editTypicalSkipRate, editRetentionCurve, typicalRetentionCurve,
     customGraphData, editYCenter, editYTop, editTypicalTop,
-    editXDate1, editXDate2, editXDate3, timeRangeMode,
+    editXDate1, editXDate2, editXDate3, timeRangeMode, showGraph,
+    editSources, editCountries, editAgeGroups, editAccountsReached, editFollows,
     accountUsername, postIndex,
   ]);
 
@@ -272,6 +293,16 @@ const ReelInsightsScreen = () => {
       if (d.xDate2) setEditXDate2(d.xDate2 as string);
       if (d.xDate3) setEditXDate3(d.xDate3 as string);
       if (d.timeRangeMode) setTimeRangeMode(d.timeRangeMode as 'custom' | '12h' | '24h');
+      if (d.showGraph != null) setShowGraph(d.showGraph as boolean);
+      if (d.sources) setEditSources(d.sources as { name: string; pct: number }[]);
+      if (d.countries) setEditCountries(d.countries as { name: string; pct: number }[]);
+      if (d.ageGroups) setEditAgeGroups(d.ageGroups as { range: string; pct: number }[]);
+      if (d.accountsReached != null) setEditAccountsReached(d.accountsReached as number);
+      if (d.follows != null) setEditFollows(d.follows as number);
+      // Load media fields for cross-device sync
+      if (d.thumbnail) setPostImage(d.thumbnail as string);
+      if (d.videoUrl) setPostVideoUrl(d.videoUrl as string);
+      if (d.caption) setPostCaption(d.caption as string);
     })();
   }, [accountUsername, postIndex]);
   // If saved viewsOverTime has custom labels at ANY of the 3 positions, mark as manually edited
@@ -325,17 +356,11 @@ const ReelInsightsScreen = () => {
   const genderFemale = 100 - genderMale;
   const watchTime = editWatchTime;
   const avgWatchTime = editAvgWatchTime;
-  const countries = ins?.countries || [
-    { name: "India", pct: 54.1 }, { name: "Iran", pct: 19.9 }, { name: "Uzbekistan", pct: 5.7 }, { name: "Türkiye", pct: 2.6 }, { name: "Kazakhstan", pct: 1.6 },
-  ];
-  const ageGroups = ins?.ageGroups || [
-    { range: "13-17", pct: 32.3 }, { range: "18-24", pct: 35.9 }, { range: "25-34", pct: 20.2 }, { range: "35-44", pct: 7.1 }, { range: "45-54", pct: 2.3 }, { range: "55-64", pct: 0.8 }, { range: "65+", pct: 1.4 },
-  ];
-  const sources = ins?.sources || [
-    { name: "Feed", pct: 63.4 }, { name: "Reels tab", pct: 11.1 }, { name: "Stories", pct: 10.6 }, { name: "Explore", pct: 7.4 }, { name: "Profile", pct: 6.0 },
-  ];
-  const accountsReached = ins?.accountsReached ?? 567;
-  const follows = ins?.follows ?? 0;
+  const countries = editCountries;
+  const ageGroups = editAgeGroups;
+  const sources = editSources;
+  const accountsReached = editAccountsReached;
+  const follows = editFollows;
 
   // Generate separate graphs for All, Followers, Non-followers
   // customGraphData = user-drawn graph (Draw ON + save). Otherwise auto-generate from views count.
@@ -406,6 +431,11 @@ const ReelInsightsScreen = () => {
       retentionCurve: editRetentionCurve,
       watchTime: editWatchTime,
       avgWatchTime: editAvgWatchTime,
+      sources: editSources,
+      countries: editCountries,
+      ageGroups: editAgeGroups,
+      accountsReached: editAccountsReached,
+      follows: editFollows,
     };
     reel.graphStartDate = editStartDate;
     reel.duration = editDuration;
@@ -423,10 +453,11 @@ const ReelInsightsScreen = () => {
     }
     reel.yCenter = editYCenter;
     reel.yTop = editYTop;
+    reel.showGraph = showGraph;
     freshData[postIndex] = reel;
     saveReelsData(freshData);
     console.log("[InsightsPersist] Saved edits for reel", postIndex);
-  }, [isMainAccount, postIndex, editViews, editLikes, editComments, editShares, editSaves, editFollowerPct, editGenderMale, editViewRate, editStartDate, editDuration, editXDate1, editXDate2, editXDate3, customGraphData, editYCenter, editYTop, editSkipRate, editTypicalSkipRate, editRetentionCurve, editWatchTime, editAvgWatchTime]);
+  }, [isMainAccount, postIndex, editViews, editLikes, editComments, editShares, editSaves, editFollowerPct, editGenderMale, editViewRate, editStartDate, editDuration, editXDate1, editXDate2, editXDate3, customGraphData, editYCenter, editYTop, editSkipRate, editTypicalSkipRate, editRetentionCurve, editWatchTime, editAvgWatchTime, showGraph, editSources, editCountries, editAgeGroups, editAccountsReached, editFollows]);
 
   // Auto-persist edits to localStorage (skip initial mount)
   const hasMounted = useRef(false);
@@ -481,12 +512,12 @@ const ReelInsightsScreen = () => {
       </header>
 
       {/* Reel Preview */}
-      <div className="flex flex-col items-center py-6 px-4">
-        <div className="w-[160px] rounded-lg overflow-hidden shadow-lg relative">
+      <div className="flex flex-col items-center py-4 px-4">
+        <div className="w-[100px] rounded-lg overflow-hidden shadow-lg relative">
           <img src={postImage} alt="Reel thumbnail" className="w-full aspect-[9/16] object-cover" />
 
         </div>
-        <p className="mt-4 text-[14px] text-foreground text-center leading-[20px] whitespace-pre-wrap break-words w-full px-2">{post?.caption || "❤️🤍..."}</p>
+        <p className="mt-3 text-[13px] text-foreground text-center leading-[18px] whitespace-pre-wrap break-words w-full px-2">{postCaption}</p>
         <p
           className="text-[12px] text-muted-foreground mt-2.5 cursor-pointer active:opacity-60"
           onClick={() => {
@@ -648,101 +679,119 @@ const ReelInsightsScreen = () => {
 
       <div className="border-t border-border mx-4" />
 
-      {/* Views over time */}
-      <div className="px-4 py-5">
-        <div className="flex items-center justify-between mb-3">
-          <h3
-            className="text-[16px] font-bold text-foreground cursor-pointer select-none"
-            onContextMenu={(e) => e.preventDefault()}
-            onTouchStart={() => {
-              longPressTriggered.current = false;
-              longPressTimer.current = setTimeout(() => {
-                longPressTriggered.current = true;
-                setGraphEditorOpen(true);
-              }, 2300);
-            }}
-            onTouchEnd={endLongPress}
-            onTouchCancel={endLongPress}
-            onMouseDown={() => {
-              longPressTriggered.current = false;
-              longPressTimer.current = setTimeout(() => {
-                longPressTriggered.current = true;
-                setGraphEditorOpen(true);
-              }, 2300);
-            }}
-            onMouseUp={endLongPress}
-            onMouseLeave={endLongPress}
-          >Views over time</h3>
-        </div>
-        <div className="flex gap-2 mb-4">
-          {["All", "Followers", "Non-followers"].map((f) => (
+      {/* Views over time — hidden if showGraph is off */}
+      {!showGraph && (
+        <div className="px-4 py-3">
+          <div className="flex items-center justify-between">
+            <span className="text-[13px] text-muted-foreground">Graph is hidden</span>
             <button
-              key={f}
-              onClick={() => setViewsFilter(f)}
-              className={cn(
-                "rounded-full px-4 py-1.5 text-[13px] font-medium border transition-colors",
-                viewsFilter === f
-                  ? "bg-muted text-foreground border-border"
-                  : "bg-background text-foreground border-border"
-              )}
+              onClick={() => {
+                setShowGraph(true);
+                saveToSupabase({ showGraph: true });
+              }}
+              className={`w-[44px] h-[24px] rounded-full transition-colors bg-muted`}
             >
-              {f}
+              <div className={`w-[20px] h-[20px] rounded-full bg-white shadow transition-transform mx-[2px] translate-x-0`} />
             </button>
-          ))}
+          </div>
         </div>
-        <div className="h-44 overflow-hidden relative">
-          <div
-            className="flex transition-transform duration-300 ease-in-out h-full"
-            style={{ width: '300%', transform: `translateX(-${filterOrder.indexOf(viewsFilter) * (100 / 3)}%)` }}
-          >
-            {[viewsOverTimeAll, viewsOverTimeFollowers, viewsOverTimeNonFollowers].map((data, gi) => (
-              <div key={gi} className="h-full" style={{ width: `${100 / 3}%` }}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={data} margin={{ top: 5, right: 5, left: -5, bottom: 0 }}>
-                    <defs>
-                      <linearGradient id={`reelGrad${gi}`} x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="#E040FB" stopOpacity={0.1} />
-                        <stop offset="100%" stopColor="#E040FB" stopOpacity={0} />
-                      </linearGradient>
-                    </defs>
-                    {(() => {
-                      const ratios = [1, followerPct / 100, nonFollowerPct / 100];
-                      const r = ratios[gi];
-                      const centerVal = Math.round(editYCenter * r);
-                      const topVal = Math.round(editYTop * r);
-                      const yTicks = [0, centerVal, topVal];
-                      const yDomain = [0, topVal];
-                      return (
-                        <>
-                          <CartesianGrid horizontal={false} vertical={false} />
-                          <XAxis dataKey="day" fontSize={11} tickLine={false} axisLine={false} tick={{ fill: 'hsl(var(--muted-foreground))' }} />
-                          <YAxis fontSize={11} tickLine={false} axisLine={false} width={40} allowDataOverflow={true} tick={{ fill: 'hsl(var(--muted-foreground))' }} domain={yDomain} ticks={yTicks} tickCount={3} tickFormatter={(v: number) => { if (v === 0) return '0'; if (v >= 1000) { const k = v / 1000; return k % 1 === 0 ? `${k}K` : `${k.toFixed(1)}K`; } return String(v); }} />
-                          <ReferenceLine y={0} stroke="hsl(var(--border))" strokeOpacity={0.4} />
-                          <ReferenceLine y={centerVal} stroke="hsl(var(--border))" strokeOpacity={0.4} />
-                          <ReferenceLine y={topVal} stroke="hsl(var(--border))" strokeOpacity={0.4} />
-                        </>
-                      );
-                    })()}
-                    <Area type="monotone" dataKey="thisReel" stroke="#E040FB" fill="none" strokeWidth={3} dot={false} />
-                    <Area type="monotone" dataKey="typical" stroke="#9CA3AF" fill="none" strokeWidth={2.5} strokeDasharray="8 6" dot={false} />
-                  </AreaChart>
-                </ResponsiveContainer>
-              </div>
+      )}
+      {showGraph && (<>
+        <div className="px-4 py-5">
+          <div className="flex items-center justify-between mb-3">
+            <h3
+              className="text-[16px] font-bold text-foreground cursor-pointer select-none"
+              onContextMenu={(e) => e.preventDefault()}
+              onTouchStart={() => {
+                longPressTriggered.current = false;
+                longPressTimer.current = setTimeout(() => {
+                  longPressTriggered.current = true;
+                  setGraphEditorOpen(true);
+                }, 2300);
+              }}
+              onTouchEnd={endLongPress}
+              onTouchCancel={endLongPress}
+              onMouseDown={() => {
+                longPressTriggered.current = false;
+                longPressTimer.current = setTimeout(() => {
+                  longPressTriggered.current = true;
+                  setGraphEditorOpen(true);
+                }, 2300);
+              }}
+              onMouseUp={endLongPress}
+              onMouseLeave={endLongPress}
+            >Views over time</h3>
+          </div>
+          <div className="flex gap-2 mb-4">
+            {["All", "Followers", "Non-followers"].map((f) => (
+              <button
+                key={f}
+                onClick={() => setViewsFilter(f)}
+                className={cn(
+                  "rounded-full px-4 py-1.5 text-[13px] font-medium border transition-colors",
+                  viewsFilter === f
+                    ? "bg-muted text-foreground border-border"
+                    : "bg-background text-foreground border-border"
+                )}
+              >
+                {f}
+              </button>
             ))}
           </div>
-        </div>
-        <div className="flex items-center justify-center gap-6 mt-2">
-          <div className="flex items-center gap-1.5">
-            <div className="h-2 w-2 rounded-full bg-[#E040FB]" />
-            <span className="text-[12px] text-muted-foreground">This reel</span>
+          <div className="h-44 overflow-hidden relative">
+            <div
+              className="flex transition-transform duration-300 ease-in-out h-full"
+              style={{ width: '300%', transform: `translateX(-${filterOrder.indexOf(viewsFilter) * (100 / 3)}%)` }}
+            >
+              {[viewsOverTimeAll, viewsOverTimeFollowers, viewsOverTimeNonFollowers].map((data, gi) => (
+                <div key={gi} className="h-full" style={{ width: `${100 / 3}%` }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={data} margin={{ top: 5, right: 5, left: -5, bottom: 0 }}>
+                      <defs>
+                        <linearGradient id={`reelGrad${gi}`} x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor="#E040FB" stopOpacity={0.1} />
+                          <stop offset="100%" stopColor="#E040FB" stopOpacity={0} />
+                        </linearGradient>
+                      </defs>
+                      {(() => {
+                        const ratios = [1, followerPct / 100, nonFollowerPct / 100];
+                        const r = ratios[gi];
+                        const centerVal = Math.round(editYCenter * r);
+                        const topVal = Math.round(editYTop * r);
+                        const yTicks = [0, centerVal, topVal];
+                        const yDomain = [0, topVal];
+                        return (
+                          <>
+                            <CartesianGrid horizontal={false} vertical={false} />
+                            <XAxis dataKey="day" fontSize={11} tickLine={false} axisLine={false} tick={{ fill: 'hsl(var(--muted-foreground))' }} />
+                            <YAxis fontSize={11} tickLine={false} axisLine={false} width={40} allowDataOverflow={true} tick={{ fill: 'hsl(var(--muted-foreground))' }} domain={yDomain} ticks={yTicks} tickCount={3} tickFormatter={(v: number) => { if (v === 0) return '0'; if (v >= 1000) { const k = v / 1000; return k % 1 === 0 ? `${k}K` : `${k.toFixed(1)}K`; } return String(v); }} />
+                            <ReferenceLine y={0} stroke="hsl(var(--border))" strokeOpacity={0.4} />
+                            <ReferenceLine y={centerVal} stroke="hsl(var(--border))" strokeOpacity={0.4} />
+                            <ReferenceLine y={topVal} stroke="hsl(var(--border))" strokeOpacity={0.4} />
+                          </>
+                        );
+                      })()}
+                      <Area type="monotone" dataKey="thisReel" stroke="#E040FB" fill="none" strokeWidth={3} dot={false} />
+                      <Area type="monotone" dataKey="typical" stroke="#9CA3AF" fill="none" strokeWidth={2.5} strokeDasharray="8 6" dot={false} />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </div>
+              ))}
+            </div>
           </div>
-          <div className="flex items-center gap-1.5">
-            <div className="h-2 w-2 rounded-full bg-[#9CA3AF]" />
-            <span className="text-[12px] text-muted-foreground">Your typical reel views</span>
+          <div className="flex items-center justify-center gap-6 mt-2">
+            <div className="flex items-center gap-1.5">
+              <div className="h-2 w-2 rounded-full bg-[#E040FB]" />
+              <span className="text-[12px] text-muted-foreground">This reel</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <div className="h-2 w-2 rounded-full bg-[#9CA3AF]" />
+              <span className="text-[12px] text-muted-foreground">Your typical reel views</span>
+            </div>
           </div>
-        </div>
 
-      </div>
+        </div>
+      </>)}
 
       <div className="h-[6px] bg-secondary" />
 
@@ -750,19 +799,84 @@ const ReelInsightsScreen = () => {
       <div className="px-4 py-5">
         <h3 className="text-[16px] font-bold text-foreground mb-4">Top sources of views</h3>
         <div className="space-y-2">
-          {sources.map((item) => (
-            <div key={item.name}>
-              <span className="text-[11px] text-foreground block mb-1">{item.name}</span>
+          {sources.map((item, idx) => (
+            <div key={idx}>
+              <span
+                className="text-[11px] text-foreground block mb-1 cursor-pointer select-none"
+                onContextMenu={(e) => e.preventDefault()}
+                onTouchStart={() => {
+                  longPressTriggered.current = false;
+                  longPressTimer.current = setTimeout(() => {
+                    longPressTriggered.current = true;
+                    setEditModal({
+                      label: `Source name #${idx + 1}`,
+                      value: item.name,
+                      isText: true,
+                      onSave: ((v: any) => {
+                        const updated = [...editSources];
+                        updated[idx] = { ...updated[idx], name: String(v) };
+                        setEditSources(updated);
+                      }) as any,
+                    });
+                  }, 800);
+                }}
+                onTouchEnd={endLongPress}
+                onTouchCancel={endLongPress}
+                onMouseDown={() => {
+                  longPressTriggered.current = false;
+                  longPressTimer.current = setTimeout(() => {
+                    longPressTriggered.current = true;
+                    setEditModal({
+                      label: `Source name #${idx + 1}`,
+                      value: item.name,
+                      isText: true,
+                      onSave: ((v: any) => {
+                        const updated = [...editSources];
+                        updated[idx] = { ...updated[idx], name: String(v) };
+                        setEditSources(updated);
+                      }) as any,
+                    });
+                  }, 800);
+                }}
+                onMouseUp={endLongPress}
+                onMouseLeave={endLongPress}
+              >{item.name}</span>
               <div className="flex items-center gap-2">
                 <div className="flex-1 h-[8px] rounded-full bg-secondary/50 overflow-hidden">
                   <div className="h-full ig-bar-gradient" style={{ width: `${item.pct}%` }} />
                 </div>
-                <span className="text-[11px] text-foreground w-[36px] text-right">{item.pct}%</span>
+                <span
+                  className="text-[11px] text-foreground w-[36px] text-right cursor-pointer select-none"
+                  onContextMenu={(e) => e.preventDefault()}
+                  onTouchStart={() => startLongPress(`${item.name} %`, item.pct, (v) => {
+                    const updated = [...editSources];
+                    updated[idx] = { ...updated[idx], pct: Math.min(100, v) };
+                    setEditSources(updated);
+                  })}
+                  onTouchEnd={endLongPress}
+                  onTouchCancel={endLongPress}
+                  onMouseDown={() => startLongPress(`${item.name} %`, item.pct, (v) => {
+                    const updated = [...editSources];
+                    updated[idx] = { ...updated[idx], pct: Math.min(100, v) };
+                    setEditSources(updated);
+                  })}
+                  onMouseUp={endLongPress}
+                  onMouseLeave={endLongPress}
+                >{item.pct}%</span>
               </div>
             </div>
           ))}
         </div>
-        <div className="border-t border-border mt-5 pt-4 flex items-center justify-between">
+        <div
+          className="border-t border-border mt-5 pt-4 flex items-center justify-between cursor-pointer select-none"
+          onContextMenu={(e) => e.preventDefault()}
+          onTouchStart={() => startLongPress("Accounts reached", accountsReached, setEditAccountsReached)}
+          onTouchEnd={endLongPress}
+          onTouchCancel={endLongPress}
+          onMouseDown={() => startLongPress("Accounts reached", accountsReached, setEditAccountsReached)}
+          onMouseUp={endLongPress}
+          onMouseLeave={endLongPress}
+        >
           <span className="text-[14px] text-foreground">Accounts reached</span>
           <span className="text-[14px] text-foreground">{fmtNum(accountsReached)}</span>
         </div>
@@ -1062,7 +1176,16 @@ const ReelInsightsScreen = () => {
 
       {/* Profile activity */}
       <div className="px-4 py-5">
-        <div className="flex items-center justify-between mb-3">
+        <div
+          className="flex items-center justify-between mb-3 cursor-pointer select-none"
+          onContextMenu={(e) => e.preventDefault()}
+          onTouchStart={() => startLongPress("Follows", follows, setEditFollows)}
+          onTouchEnd={endLongPress}
+          onTouchCancel={endLongPress}
+          onMouseDown={() => startLongPress("Follows", follows, setEditFollows)}
+          onMouseUp={endLongPress}
+          onMouseLeave={endLongPress}
+        >
           <div className="flex items-center gap-2">
             <h3 className="text-[16px] font-bold text-foreground">Profile activity</h3>
             <Info size={14} className="text-muted-foreground" />
@@ -1121,14 +1244,70 @@ const ReelInsightsScreen = () => {
 
         {audienceTab === "Country" && (
           <div className="space-y-2">
-            {countries.map((c) => (
-              <div key={c.name}>
-                <span className="text-[11px] text-foreground block mb-1">{c.name}</span>
+            {countries.map((c, idx) => (
+              <div key={idx}>
+                <span
+                  className="text-[11px] text-foreground block mb-1 cursor-pointer select-none"
+                  onContextMenu={(e) => e.preventDefault()}
+                  onTouchStart={() => {
+                    longPressTriggered.current = false;
+                    longPressTimer.current = setTimeout(() => {
+                      longPressTriggered.current = true;
+                      setEditModal({
+                        label: `Country name #${idx + 1}`,
+                        value: c.name,
+                        isText: true,
+                        onSave: ((v: any) => {
+                          const updated = [...editCountries];
+                          updated[idx] = { ...updated[idx], name: String(v) };
+                          setEditCountries(updated);
+                        }) as any,
+                      });
+                    }, 800);
+                  }}
+                  onTouchEnd={endLongPress}
+                  onTouchCancel={endLongPress}
+                  onMouseDown={() => {
+                    longPressTriggered.current = false;
+                    longPressTimer.current = setTimeout(() => {
+                      longPressTriggered.current = true;
+                      setEditModal({
+                        label: `Country name #${idx + 1}`,
+                        value: c.name,
+                        isText: true,
+                        onSave: ((v: any) => {
+                          const updated = [...editCountries];
+                          updated[idx] = { ...updated[idx], name: String(v) };
+                          setEditCountries(updated);
+                        }) as any,
+                      });
+                    }, 800);
+                  }}
+                  onMouseUp={endLongPress}
+                  onMouseLeave={endLongPress}
+                >{c.name}</span>
                 <div className="flex items-center gap-2">
                   <div className="flex-1 h-[8px] rounded-full bg-secondary/50 overflow-hidden">
                     <div className="h-full ig-bar-gradient" style={{ width: `${c.pct}%` }} />
                   </div>
-                  <span className="text-[11px] text-foreground w-[36px] text-right">{c.pct}%</span>
+                  <span
+                    className="text-[11px] text-foreground w-[36px] text-right cursor-pointer select-none"
+                    onContextMenu={(e) => e.preventDefault()}
+                    onTouchStart={() => startLongPress(`${c.name} %`, c.pct, (v) => {
+                      const updated = [...editCountries];
+                      updated[idx] = { ...updated[idx], pct: Math.min(100, v) };
+                      setEditCountries(updated);
+                    })}
+                    onTouchEnd={endLongPress}
+                    onTouchCancel={endLongPress}
+                    onMouseDown={() => startLongPress(`${c.name} %`, c.pct, (v) => {
+                      const updated = [...editCountries];
+                      updated[idx] = { ...updated[idx], pct: Math.min(100, v) };
+                      setEditCountries(updated);
+                    })}
+                    onMouseUp={endLongPress}
+                    onMouseLeave={endLongPress}
+                  >{c.pct}%</span>
                 </div>
               </div>
             ))}
@@ -1137,14 +1316,70 @@ const ReelInsightsScreen = () => {
 
         {audienceTab === "Age" && (
           <div className="space-y-1">
-            {ageGroups.map((a) => (
-              <div key={a.range}>
-                <span className="text-[14px] text-foreground block mb-0.5">{a.range}</span>
+            {ageGroups.map((a, idx) => (
+              <div key={idx}>
+                <span
+                  className="text-[14px] text-foreground block mb-0.5 cursor-pointer select-none"
+                  onContextMenu={(e) => e.preventDefault()}
+                  onTouchStart={() => {
+                    longPressTriggered.current = false;
+                    longPressTimer.current = setTimeout(() => {
+                      longPressTriggered.current = true;
+                      setEditModal({
+                        label: `Age range #${idx + 1}`,
+                        value: a.range,
+                        isText: true,
+                        onSave: ((v: any) => {
+                          const updated = [...editAgeGroups];
+                          updated[idx] = { ...updated[idx], range: String(v) };
+                          setEditAgeGroups(updated);
+                        }) as any,
+                      });
+                    }, 800);
+                  }}
+                  onTouchEnd={endLongPress}
+                  onTouchCancel={endLongPress}
+                  onMouseDown={() => {
+                    longPressTriggered.current = false;
+                    longPressTimer.current = setTimeout(() => {
+                      longPressTriggered.current = true;
+                      setEditModal({
+                        label: `Age range #${idx + 1}`,
+                        value: a.range,
+                        isText: true,
+                        onSave: ((v: any) => {
+                          const updated = [...editAgeGroups];
+                          updated[idx] = { ...updated[idx], range: String(v) };
+                          setEditAgeGroups(updated);
+                        }) as any,
+                      });
+                    }, 800);
+                  }}
+                  onMouseUp={endLongPress}
+                  onMouseLeave={endLongPress}
+                >{a.range}</span>
                 <div className="flex items-center gap-3">
                   <div className="flex-1 h-[8px] rounded-full bg-secondary/50 overflow-hidden">
                     <div className="h-full ig-bar-gradient" style={{ width: `${a.pct}%` }} />
                   </div>
-                  <span className="text-[14px] text-foreground w-[48px] text-right">{a.pct}%</span>
+                  <span
+                    className="text-[14px] text-foreground w-[48px] text-right cursor-pointer select-none"
+                    onContextMenu={(e) => e.preventDefault()}
+                    onTouchStart={() => startLongPress(`${a.range} %`, a.pct, (v) => {
+                      const updated = [...editAgeGroups];
+                      updated[idx] = { ...updated[idx], pct: Math.min(100, v) };
+                      setEditAgeGroups(updated);
+                    })}
+                    onTouchEnd={endLongPress}
+                    onTouchCancel={endLongPress}
+                    onMouseDown={() => startLongPress(`${a.range} %`, a.pct, (v) => {
+                      const updated = [...editAgeGroups];
+                      updated[idx] = { ...updated[idx], pct: Math.min(100, v) };
+                      setEditAgeGroups(updated);
+                    })}
+                    onMouseUp={endLongPress}
+                    onMouseLeave={endLongPress}
+                  >{a.pct}%</span>
                 </div>
               </div>
             ))}
@@ -1204,6 +1439,21 @@ const ReelInsightsScreen = () => {
               )}
               {graphEditorOpen && (
                 <>
+                  {/* Show Graph Toggle */}
+                  <div className="flex items-center justify-between mb-4">
+                    <label className="text-[13px] text-foreground font-semibold">Show Graph</label>
+                    <button
+                      onClick={() => {
+                        const newVal = !showGraph;
+                        setShowGraph(newVal);
+                        saveToSupabase({ showGraph: newVal });
+                      }}
+                      className={`w-[44px] h-[24px] rounded-full transition-colors ${showGraph ? 'bg-[hsl(var(--ig-blue))]' : 'bg-muted'}`}
+                    >
+                      <div className={`w-[20px] h-[20px] rounded-full bg-white shadow transition-transform mx-[2px] ${showGraph ? 'translate-x-[20px]' : 'translate-x-0'}`} />
+                    </button>
+                  </div>
+                  <p className="text-[10px] text-muted-foreground -mt-3 mb-3">Toggle off to hide the Views over time graph</p>
                   {/* Quick value editors */}
                   <div className="flex gap-2 mb-3">
                     <div className="flex-1">

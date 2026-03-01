@@ -35,6 +35,7 @@ export interface ExtendedPostItem {
   graphStartDate?: string;
   yCenter?: number;
   yTop?: number;
+  showGraph?: boolean;
   insights: ReelInsights;
 }
 

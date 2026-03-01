@@ -101,7 +101,7 @@ const ReelEditModal = ({ open, onClose, reel, reelIndex, onSave, onDelete }: Ree
     setData((prev) => prev ? { ...prev, insights: { ...prev.insights, [key]: value } } : prev);
   };
 
-  const handleSave = (e?: React.MouseEvent) => {
+  const handleSave = async (e?: React.MouseEvent) => {
     if (e) { e.preventDefault(); e.stopPropagation(); }
     const fixedData = { ...data };
     fixedData.insights = { ...fixedData.insights, genderFemale: 100 - fixedData.insights.genderMale };
@@ -116,12 +116,42 @@ const ReelEditModal = ({ open, onClose, reel, reelIndex, onSave, onDelete }: Ree
     }
     console.log("[ReelEdit] Saving reel", reelIndex, "musicTitle:", fixedData.musicTitle, "musicIcon:", fixedData.musicIcon?.slice(0, 50), "caption:", fixedData.caption?.slice(0, 30));
     onSave(reelIndex, fixedData);
-    // Verify save worked
+
+    // Also persist media fields to Supabase for cross-device sync
     try {
-      const saved = JSON.parse(localStorage.getItem('just4abhii_reels_data_v2') || '[]');
-      const r = saved[reelIndex];
-      console.log("[ReelEdit] VERIFIED musicTitle in localStorage:", r?.musicTitle, "musicIcon:", r?.musicIcon?.slice(0, 50));
-    } catch { }
+      const mediaData: Record<string, unknown> = {};
+      // Only save non-blob, non-base64 URLs to Supabase (they work cross-device)
+      if (fixedData.videoUrl && !fixedData.videoUrl.startsWith('blob:')) {
+        mediaData.videoUrl = fixedData.videoUrl;
+      }
+      if (fixedData.thumbnail && !fixedData.thumbnail.startsWith('data:')) {
+        mediaData.thumbnail = fixedData.thumbnail;
+      }
+      if (fixedData.musicIcon && !fixedData.musicIcon.startsWith('data:')) {
+        mediaData.musicIcon = fixedData.musicIcon;
+      }
+      mediaData.musicTitle = fixedData.musicTitle;
+      mediaData.caption = fixedData.caption;
+      mediaData.duration = fixedData.duration;
+
+      // Read existing Supabase data and merge
+      const { data: existing } = await (supabase as any)
+        .from('reels_data')
+        .select('data')
+        .eq('account', 'just4abhii')
+        .eq('post_index', reelIndex)
+        .maybeSingle();
+
+      const merged = { ...(existing?.data || {}), ...mediaData };
+      await (supabase as any).from('reels_data').upsert(
+        { account: 'just4abhii', post_index: reelIndex, data: merged, updated_at: new Date().toISOString() },
+        { onConflict: 'account,post_index' }
+      );
+      console.log("[ReelEdit] Saved media to Supabase for reel", reelIndex);
+    } catch (err) {
+      console.warn("[ReelEdit] Failed to save media to Supabase:", err);
+    }
+
     onClose();
   };
 
@@ -180,13 +210,23 @@ const ReelEditModal = ({ open, onClose, reel, reelIndex, onSave, onDelete }: Ree
                   type="file"
                   accept="image/*"
                   className="hidden"
-                  onChange={(e) => {
+                  onChange={async (e) => {
                     const file = e.target.files?.[0];
                     if (!file) return;
                     if (file.size > 2 * 1024 * 1024) { alert("Image must be under 2MB"); return; }
-                    const reader = new FileReader();
-                    reader.onload = (ev) => setData((prev) => prev ? { ...prev, musicIcon: ev.target?.result as string } : prev);
-                    reader.readAsDataURL(file);
+                    try {
+                      const ext = file.name.split('.').pop() || 'jpg';
+                      const fileName = `music-icon-${reelIndex}-${Date.now()}.${ext}`;
+                      const { error } = await supabase.storage.from('reel-videos').upload(fileName, file, { cacheControl: '3600', upsert: true, contentType: file.type });
+                      if (error) throw error;
+                      const { data: urlData } = supabase.storage.from('reel-videos').getPublicUrl(fileName);
+                      setData((prev) => prev ? { ...prev, musicIcon: urlData.publicUrl } : prev);
+                    } catch (err) {
+                      console.warn('[MusicIcon] Supabase upload failed, using base64 fallback', err);
+                      const reader = new FileReader();
+                      reader.onload = (ev) => setData((prev) => prev ? { ...prev, musicIcon: ev.target?.result as string } : prev);
+                      reader.readAsDataURL(file);
+                    }
                     e.target.value = "";
                   }}
                 />
@@ -376,18 +416,29 @@ const ReelEditModal = ({ open, onClose, reel, reelIndex, onSave, onDelete }: Ree
               type="file"
               accept="image/*"
               className="hidden"
-              onChange={(e) => {
+              onChange={async (e) => {
                 const file = e.target.files?.[0];
                 if (!file) return;
-                if (file.size > 2 * 1024 * 1024) {
-                  alert("Image must be under 2MB");
+                if (file.size > 5 * 1024 * 1024) {
+                  alert("Image must be under 5MB");
                   return;
                 }
-                const reader = new FileReader();
-                reader.onload = (ev) => {
-                  setData((prev) => prev ? { ...prev, thumbnail: ev.target?.result as string } : prev);
-                };
-                reader.readAsDataURL(file);
+                try {
+                  const ext = file.name.split('.').pop() || 'jpg';
+                  const fileName = `thumb-${reelIndex}-${Date.now()}.${ext}`;
+                  const { error } = await supabase.storage.from('reel-videos').upload(fileName, file, { cacheControl: '3600', upsert: true, contentType: file.type });
+                  if (error) throw error;
+                  const { data: urlData } = supabase.storage.from('reel-videos').getPublicUrl(fileName);
+                  setData((prev) => prev ? { ...prev, thumbnail: urlData.publicUrl } : prev);
+                  console.log('[ThumbUpload] Supabase success:', urlData.publicUrl);
+                } catch (err) {
+                  console.warn('[ThumbUpload] Supabase failed, using base64 fallback', err);
+                  const reader = new FileReader();
+                  reader.onload = (ev) => {
+                    setData((prev) => prev ? { ...prev, thumbnail: ev.target?.result as string } : prev);
+                  };
+                  reader.readAsDataURL(file);
+                }
                 e.target.value = "";
               }}
             />

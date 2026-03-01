@@ -5,6 +5,7 @@ import { mockAccounts, currentUser } from "@/data/mockData";
 import { loadReelsData } from "@/data/reelInsightsData";
 import { cn } from "@/lib/utils";
 import { motion } from "framer-motion";
+import { supabase } from "@/integrations/supabase/client";
 
 const RepostIcon = ({ size = 24 }: { size?: number }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -151,11 +152,37 @@ const ReelDetailScreen = () => {
     }
     return thumb;
   };
-  const postImage = getPostImage();
+  const [postImage, setPostImage] = useState(getPostImage());
 
   // Dynamic stats from insights data
   const ins = reelData?.insights;
-  const caption = reelData?.caption || "Nancy doll 😘🌹 ...";
+  const [caption, setCaption] = useState(reelData?.caption || "Nancy doll 😘🌹 ...");
+  const [reelVideoUrl, setReelVideoUrl] = useState(reelData?.videoUrl || fallbackPost?.videoUrl || "");
+  const [reelMusicTitle, setReelMusicTitle] = useState(reelData?.musicTitle || "");
+  const [reelMusicIcon, setReelMusicIcon] = useState(reelData?.musicIcon || "");
+
+  // Load media from Supabase for cross-device sync
+  useEffect(() => {
+    (async () => {
+      try {
+        const { data: rows } = await (supabase as any)
+          .from('reels_data')
+          .select('data')
+          .eq('account', accountUsername)
+          .eq('post_index', postIndex)
+          .maybeSingle();
+        if (!rows?.data) return;
+        const d = rows.data as Record<string, unknown>;
+        if (d.thumbnail) setPostImage(d.thumbnail as string);
+        if (d.videoUrl) setReelVideoUrl(d.videoUrl as string);
+        if (d.caption) setCaption(d.caption as string);
+        if (d.musicTitle) setReelMusicTitle(d.musicTitle as string);
+        if (d.musicIcon) setReelMusicIcon(d.musicIcon as string);
+      } catch (err) {
+        console.warn('[ReelDetail] Failed to load media from Supabase:', err);
+      }
+    })();
+  }, [accountUsername, postIndex]);
   const fmtK = (n: number) => {
     if (n >= 1000000) return `${(n / 1000000).toFixed(1).replace(/\.0$/, '')}M`;
     if (n >= 1000) return `${(n / 1000).toFixed(n >= 10000 ? 0 : 1)}K`;
@@ -183,9 +210,9 @@ const ReelDetailScreen = () => {
       {/* Full screen media — fills entire viewport, 9:16 Instagram size */}
       <div className="absolute inset-0 flex items-center justify-center bg-black">
         <div className="relative w-full h-full max-w-[calc(100vh*9/16)] mx-auto">
-          {(reelData?.videoUrl || fallbackPost?.videoUrl) && videoPlaying ? (
+          {reelVideoUrl && videoPlaying ? (
             (() => {
-              const videoUrl = reelData?.videoUrl || fallbackPost?.videoUrl || "";
+              const videoUrl = reelVideoUrl;
               if (videoUrl.includes("screenpal.com")) {
                 const idMatch = videoUrl.match(/screenpal\.com\/(?:watch|player|content\/video)\/([a-zA-Z0-9]+)/);
                 const videoId = idMatch ? idMatch[1] : videoUrl.split("/").pop();
@@ -212,7 +239,7 @@ const ReelDetailScreen = () => {
             <div
               className="absolute inset-0 cursor-pointer"
               onClick={() => {
-                if (reelData?.videoUrl || fallbackPost?.videoUrl) {
+                if (reelVideoUrl) {
                   setVideoPlaying(true);
                 }
               }}
@@ -276,8 +303,8 @@ const ReelDetailScreen = () => {
         </button>
         {/* Music disc / profile pic — small spinning disc like IG */}
         <div className="w-[28px] h-[28px] rounded-[6px] border-[1.5px] border-white/40 overflow-hidden">
-          {reelData?.musicTitle && reelData?.musicIcon ? (
-            <img src={reelData.musicIcon} alt="" className="w-full h-full object-cover" />
+          {reelMusicTitle && reelMusicIcon ? (
+            <img src={reelMusicIcon} alt="" className="w-full h-full object-cover" />
           ) : (
             <img src={account.profile.avatar} alt="" className="w-full h-full object-cover" />
           )}
@@ -291,14 +318,14 @@ const ReelDetailScreen = () => {
           <img src={account.profile.avatar} alt="" className="h-[28px] w-[28px] rounded-full object-cover border border-white/30 flex-shrink-0 mt-0.5" />
           <div className="flex flex-col">
             <span className="text-[13px] font-semibold text-white leading-tight">{account.profile.username}</span>
-            {reelData?.musicTitle && (
+            {reelMusicTitle && (
               <div className="flex items-center gap-1 mt-[2px]">
                 <svg width="10" height="10" viewBox="0 0 24 24" fill="none" className="flex-shrink-0">
                   <path d="M9 17V4l10-2v13" stroke="white" strokeWidth="2.5" fill="none" />
                   <ellipse cx="5.5" cy="17.5" rx="3.5" ry="2.5" fill="white" />
                   <ellipse cx="15.5" cy="15.5" rx="3.5" ry="2.5" fill="white" />
                 </svg>
-                <span className="text-[11px] text-white/70 truncate">{reelData.musicTitle}</span>
+                <span className="text-[11px] text-white/70 truncate">{reelMusicTitle}</span>
               </div>
             )}
           </div>

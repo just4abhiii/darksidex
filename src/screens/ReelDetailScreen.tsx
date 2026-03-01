@@ -288,7 +288,7 @@ const ReelDetailScreen = () => {
       <div className="absolute bottom-0 left-0 right-0 z-10 px-3">
         {/* Avatar + Username + Music stacked tight like IG */}
         <div className="flex items-start gap-2 mb-1">
-          <img src={account.profile.avatar} alt="" className="h-[26px] w-[26px] rounded-full object-cover border-[1.5px] border-white/40 flex-shrink-0 mt-0.5" />
+          <img src={account.profile.avatar} alt="" className="h-[28px] w-[28px] rounded-full object-cover border border-white/30 flex-shrink-0 mt-0.5" />
           <div className="flex flex-col">
             <span className="text-[13px] font-bold text-white leading-tight">{account.profile.username}</span>
             {reelData?.musicTitle && (

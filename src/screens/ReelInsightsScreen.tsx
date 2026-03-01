@@ -679,49 +679,33 @@ const ReelInsightsScreen = () => {
 
       <div className="border-t border-border mx-4" />
 
-      {/* Views over time — hidden if showGraph is off */}
-      {!showGraph && (
-        <div className="px-4 py-3">
-          <div className="flex items-center justify-between">
-            <span className="text-[13px] text-muted-foreground">Graph is hidden</span>
-            <button
-              onClick={() => {
-                setShowGraph(true);
-                saveToSupabase({ showGraph: true });
-              }}
-              className={`w-[44px] h-[24px] rounded-full transition-colors bg-muted`}
-            >
-              <div className={`w-[20px] h-[20px] rounded-full bg-white shadow transition-transform mx-[2px] translate-x-0`} />
-            </button>
-          </div>
+      {/* Views over time — heading always visible, chart hidden if showGraph off */}
+      <div className="px-4 py-5">
+        <div className="flex items-center justify-between mb-3">
+          <h3
+            className="text-[16px] font-bold text-foreground cursor-pointer select-none"
+            onContextMenu={(e) => e.preventDefault()}
+            onTouchStart={() => {
+              longPressTriggered.current = false;
+              longPressTimer.current = setTimeout(() => {
+                longPressTriggered.current = true;
+                setGraphEditorOpen(true);
+              }, 2300);
+            }}
+            onTouchEnd={endLongPress}
+            onTouchCancel={endLongPress}
+            onMouseDown={() => {
+              longPressTriggered.current = false;
+              longPressTimer.current = setTimeout(() => {
+                longPressTriggered.current = true;
+                setGraphEditorOpen(true);
+              }, 2300);
+            }}
+            onMouseUp={endLongPress}
+            onMouseLeave={endLongPress}
+          >Views over time</h3>
         </div>
-      )}
-      {showGraph && (<>
-        <div className="px-4 py-5">
-          <div className="flex items-center justify-between mb-3">
-            <h3
-              className="text-[16px] font-bold text-foreground cursor-pointer select-none"
-              onContextMenu={(e) => e.preventDefault()}
-              onTouchStart={() => {
-                longPressTriggered.current = false;
-                longPressTimer.current = setTimeout(() => {
-                  longPressTriggered.current = true;
-                  setGraphEditorOpen(true);
-                }, 2300);
-              }}
-              onTouchEnd={endLongPress}
-              onTouchCancel={endLongPress}
-              onMouseDown={() => {
-                longPressTriggered.current = false;
-                longPressTimer.current = setTimeout(() => {
-                  longPressTriggered.current = true;
-                  setGraphEditorOpen(true);
-                }, 2300);
-              }}
-              onMouseUp={endLongPress}
-              onMouseLeave={endLongPress}
-            >Views over time</h3>
-          </div>
+        {showGraph && (<>
           <div className="flex gap-2 mb-4">
             {["All", "Followers", "Non-followers"].map((f) => (
               <button
@@ -789,9 +773,8 @@ const ReelInsightsScreen = () => {
               <span className="text-[12px] text-muted-foreground">Your typical reel views</span>
             </div>
           </div>
-
-        </div>
-      </>)}
+        </>)}
+      </div>
 
       <div className="h-[6px] bg-secondary" />
 
@@ -802,66 +785,38 @@ const ReelInsightsScreen = () => {
           {sources.map((item, idx) => (
             <div key={idx}>
               <span
-                className="text-[11px] text-foreground block mb-1 cursor-pointer select-none"
-                onContextMenu={(e) => e.preventDefault()}
-                onTouchStart={() => {
-                  longPressTriggered.current = false;
-                  longPressTimer.current = setTimeout(() => {
-                    longPressTriggered.current = true;
-                    setEditModal({
-                      label: `Source name #${idx + 1}`,
-                      value: item.name,
-                      isText: true,
-                      onSave: ((v: any) => {
-                        const updated = [...editSources];
-                        updated[idx] = { ...updated[idx], name: String(v) };
-                        setEditSources(updated);
-                      }) as any,
-                    });
-                  }, 800);
+                className="text-[11px] text-foreground block mb-1 cursor-pointer select-none active:opacity-60"
+                onClick={() => {
+                  setEditModal({
+                    label: `Source name #${idx + 1}`,
+                    value: item.name,
+                    isText: true,
+                    onSave: ((v: any) => {
+                      const updated = [...editSources];
+                      updated[idx] = { ...updated[idx], name: String(v) };
+                      setEditSources(updated);
+                    }) as any,
+                  });
                 }}
-                onTouchEnd={endLongPress}
-                onTouchCancel={endLongPress}
-                onMouseDown={() => {
-                  longPressTriggered.current = false;
-                  longPressTimer.current = setTimeout(() => {
-                    longPressTriggered.current = true;
-                    setEditModal({
-                      label: `Source name #${idx + 1}`,
-                      value: item.name,
-                      isText: true,
-                      onSave: ((v: any) => {
-                        const updated = [...editSources];
-                        updated[idx] = { ...updated[idx], name: String(v) };
-                        setEditSources(updated);
-                      }) as any,
-                    });
-                  }, 800);
-                }}
-                onMouseUp={endLongPress}
-                onMouseLeave={endLongPress}
               >{item.name}</span>
               <div className="flex items-center gap-2">
                 <div className="flex-1 h-[8px] rounded-full bg-secondary/50 overflow-hidden">
                   <div className="h-full ig-bar-gradient" style={{ width: `${item.pct}%` }} />
                 </div>
                 <span
-                  className="text-[11px] text-foreground w-[36px] text-right cursor-pointer select-none"
-                  onContextMenu={(e) => e.preventDefault()}
-                  onTouchStart={() => startLongPress(`${item.name} %`, item.pct, (v) => {
-                    const updated = [...editSources];
-                    updated[idx] = { ...updated[idx], pct: Math.min(100, v) };
-                    setEditSources(updated);
-                  })}
-                  onTouchEnd={endLongPress}
-                  onTouchCancel={endLongPress}
-                  onMouseDown={() => startLongPress(`${item.name} %`, item.pct, (v) => {
-                    const updated = [...editSources];
-                    updated[idx] = { ...updated[idx], pct: Math.min(100, v) };
-                    setEditSources(updated);
-                  })}
-                  onMouseUp={endLongPress}
-                  onMouseLeave={endLongPress}
+                  className="text-[11px] text-foreground w-[36px] text-right cursor-pointer select-none active:opacity-60"
+                  onClick={() => {
+                    setEditModal({
+                      label: `${item.name} %`,
+                      value: String(item.pct),
+                      isText: false,
+                      onSave: ((v: any) => {
+                        const updated = [...editSources];
+                        updated[idx] = { ...updated[idx], pct: Math.min(100, Number(v)) };
+                        setEditSources(updated);
+                      }) as any,
+                    });
+                  }}
                 >{item.pct}%</span>
               </div>
             </div>
@@ -1247,66 +1202,38 @@ const ReelInsightsScreen = () => {
             {countries.map((c, idx) => (
               <div key={idx}>
                 <span
-                  className="text-[11px] text-foreground block mb-1 cursor-pointer select-none"
-                  onContextMenu={(e) => e.preventDefault()}
-                  onTouchStart={() => {
-                    longPressTriggered.current = false;
-                    longPressTimer.current = setTimeout(() => {
-                      longPressTriggered.current = true;
-                      setEditModal({
-                        label: `Country name #${idx + 1}`,
-                        value: c.name,
-                        isText: true,
-                        onSave: ((v: any) => {
-                          const updated = [...editCountries];
-                          updated[idx] = { ...updated[idx], name: String(v) };
-                          setEditCountries(updated);
-                        }) as any,
-                      });
-                    }, 800);
+                  className="text-[11px] text-foreground block mb-1 cursor-pointer select-none active:opacity-60"
+                  onClick={() => {
+                    setEditModal({
+                      label: `Country name #${idx + 1}`,
+                      value: c.name,
+                      isText: true,
+                      onSave: ((v: any) => {
+                        const updated = [...editCountries];
+                        updated[idx] = { ...updated[idx], name: String(v) };
+                        setEditCountries(updated);
+                      }) as any,
+                    });
                   }}
-                  onTouchEnd={endLongPress}
-                  onTouchCancel={endLongPress}
-                  onMouseDown={() => {
-                    longPressTriggered.current = false;
-                    longPressTimer.current = setTimeout(() => {
-                      longPressTriggered.current = true;
-                      setEditModal({
-                        label: `Country name #${idx + 1}`,
-                        value: c.name,
-                        isText: true,
-                        onSave: ((v: any) => {
-                          const updated = [...editCountries];
-                          updated[idx] = { ...updated[idx], name: String(v) };
-                          setEditCountries(updated);
-                        }) as any,
-                      });
-                    }, 800);
-                  }}
-                  onMouseUp={endLongPress}
-                  onMouseLeave={endLongPress}
                 >{c.name}</span>
                 <div className="flex items-center gap-2">
                   <div className="flex-1 h-[8px] rounded-full bg-secondary/50 overflow-hidden">
                     <div className="h-full ig-bar-gradient" style={{ width: `${c.pct}%` }} />
                   </div>
                   <span
-                    className="text-[11px] text-foreground w-[36px] text-right cursor-pointer select-none"
-                    onContextMenu={(e) => e.preventDefault()}
-                    onTouchStart={() => startLongPress(`${c.name} %`, c.pct, (v) => {
-                      const updated = [...editCountries];
-                      updated[idx] = { ...updated[idx], pct: Math.min(100, v) };
-                      setEditCountries(updated);
-                    })}
-                    onTouchEnd={endLongPress}
-                    onTouchCancel={endLongPress}
-                    onMouseDown={() => startLongPress(`${c.name} %`, c.pct, (v) => {
-                      const updated = [...editCountries];
-                      updated[idx] = { ...updated[idx], pct: Math.min(100, v) };
-                      setEditCountries(updated);
-                    })}
-                    onMouseUp={endLongPress}
-                    onMouseLeave={endLongPress}
+                    className="text-[11px] text-foreground w-[36px] text-right cursor-pointer select-none active:opacity-60"
+                    onClick={() => {
+                      setEditModal({
+                        label: `${c.name} %`,
+                        value: String(c.pct),
+                        isText: false,
+                        onSave: ((v: any) => {
+                          const updated = [...editCountries];
+                          updated[idx] = { ...updated[idx], pct: Math.min(100, Number(v)) };
+                          setEditCountries(updated);
+                        }) as any,
+                      });
+                    }}
                   >{c.pct}%</span>
                 </div>
               </div>
@@ -1319,66 +1246,38 @@ const ReelInsightsScreen = () => {
             {ageGroups.map((a, idx) => (
               <div key={idx}>
                 <span
-                  className="text-[14px] text-foreground block mb-0.5 cursor-pointer select-none"
-                  onContextMenu={(e) => e.preventDefault()}
-                  onTouchStart={() => {
-                    longPressTriggered.current = false;
-                    longPressTimer.current = setTimeout(() => {
-                      longPressTriggered.current = true;
-                      setEditModal({
-                        label: `Age range #${idx + 1}`,
-                        value: a.range,
-                        isText: true,
-                        onSave: ((v: any) => {
-                          const updated = [...editAgeGroups];
-                          updated[idx] = { ...updated[idx], range: String(v) };
-                          setEditAgeGroups(updated);
-                        }) as any,
-                      });
-                    }, 800);
+                  className="text-[14px] text-foreground block mb-0.5 cursor-pointer select-none active:opacity-60"
+                  onClick={() => {
+                    setEditModal({
+                      label: `Age range #${idx + 1}`,
+                      value: a.range,
+                      isText: true,
+                      onSave: ((v: any) => {
+                        const updated = [...editAgeGroups];
+                        updated[idx] = { ...updated[idx], range: String(v) };
+                        setEditAgeGroups(updated);
+                      }) as any,
+                    });
                   }}
-                  onTouchEnd={endLongPress}
-                  onTouchCancel={endLongPress}
-                  onMouseDown={() => {
-                    longPressTriggered.current = false;
-                    longPressTimer.current = setTimeout(() => {
-                      longPressTriggered.current = true;
-                      setEditModal({
-                        label: `Age range #${idx + 1}`,
-                        value: a.range,
-                        isText: true,
-                        onSave: ((v: any) => {
-                          const updated = [...editAgeGroups];
-                          updated[idx] = { ...updated[idx], range: String(v) };
-                          setEditAgeGroups(updated);
-                        }) as any,
-                      });
-                    }, 800);
-                  }}
-                  onMouseUp={endLongPress}
-                  onMouseLeave={endLongPress}
                 >{a.range}</span>
                 <div className="flex items-center gap-3">
                   <div className="flex-1 h-[8px] rounded-full bg-secondary/50 overflow-hidden">
                     <div className="h-full ig-bar-gradient" style={{ width: `${a.pct}%` }} />
                   </div>
                   <span
-                    className="text-[14px] text-foreground w-[48px] text-right cursor-pointer select-none"
-                    onContextMenu={(e) => e.preventDefault()}
-                    onTouchStart={() => startLongPress(`${a.range} %`, a.pct, (v) => {
-                      const updated = [...editAgeGroups];
-                      updated[idx] = { ...updated[idx], pct: Math.min(100, v) };
-                      setEditAgeGroups(updated);
-                    })}
-                    onTouchEnd={endLongPress}
-                    onTouchCancel={endLongPress}
-                    onMouseDown={() => startLongPress(`${a.range} %`, a.pct, (v) => {
-                      const updated = [...editAgeGroups];
-                      updated[idx] = { ...updated[idx], pct: Math.min(100, v) };
-                      setEditAgeGroups(updated);
-                    })}
-                    onMouseUp={endLongPress}
-                    onMouseLeave={endLongPress}
+                    className="text-[14px] text-foreground w-[48px] text-right cursor-pointer select-none active:opacity-60"
+                    onClick={() => {
+                      setEditModal({
+                        label: `${a.range} %`,
+                        value: String(a.pct),
+                        isText: false,
+                        onSave: ((v: any) => {
+                          const updated = [...editAgeGroups];
+                          updated[idx] = { ...updated[idx], pct: Math.min(100, Number(v)) };
+                          setEditAgeGroups(updated);
+                        }) as any,
+                      });
+                    }}
                   >{a.pct}%</span>
                 </div>
               </div>

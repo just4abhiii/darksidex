@@ -7,7 +7,7 @@ const ADMIN_USERNAME = "@just4abhii";
 const USDT_ADDRESS = "0xA07b34C582F31e70110C59faD70C0395a5BD339f".toLowerCase();
 const PUBLIC_URL = "https://darksidex-just4abhiiis-projects.vercel.app";
 const KEYS_BLOB = "https://jsonblob.com/api/jsonBlob/019ca772-e65e-732a-8683-537c652da516";
-const ORDERS_BLOB = "https://jsonblob.com/api/jsonBlob/019ca0b6-4753-75e9-99c3-ebf1a5a7e993";
+const ORDERS_BLOB = "https://jsonblob.com/api/jsonBlob/019caa48-225e-7b3d-87b5-d2a1d2ec73e5";
 
 // USDT Contract Addresses (for verification)
 const USDT_CONTRACTS = {

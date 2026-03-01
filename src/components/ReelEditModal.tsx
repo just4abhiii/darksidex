@@ -117,22 +117,40 @@ const ReelEditModal = ({ open, onClose, reel, reelIndex, onSave, onDelete }: Ree
     console.log("[ReelEdit] Saving reel", reelIndex, "musicTitle:", fixedData.musicTitle, "musicIcon:", fixedData.musicIcon?.slice(0, 50), "caption:", fixedData.caption?.slice(0, 30));
     onSave(reelIndex, fixedData);
 
-    // Also persist media fields to Supabase for cross-device sync
+    // Also persist ALL fields to Supabase for cross-device sync
     try {
-      const mediaData: Record<string, unknown> = {};
+      const syncData: Record<string, unknown> = {};
       // Only save non-blob, non-base64 URLs to Supabase (they work cross-device)
       if (fixedData.videoUrl && !fixedData.videoUrl.startsWith('blob:')) {
-        mediaData.videoUrl = fixedData.videoUrl;
+        syncData.videoUrl = fixedData.videoUrl;
       }
       if (fixedData.thumbnail && !fixedData.thumbnail.startsWith('data:')) {
-        mediaData.thumbnail = fixedData.thumbnail;
+        syncData.thumbnail = fixedData.thumbnail;
       }
       if (fixedData.musicIcon && !fixedData.musicIcon.startsWith('data:')) {
-        mediaData.musicIcon = fixedData.musicIcon;
+        syncData.musicIcon = fixedData.musicIcon;
       }
-      mediaData.musicTitle = fixedData.musicTitle;
-      mediaData.caption = fixedData.caption;
-      mediaData.duration = fixedData.duration;
+      syncData.musicTitle = fixedData.musicTitle;
+      syncData.caption = fixedData.caption;
+      syncData.duration = fixedData.duration;
+      // Save all insights stats too
+      syncData.views = fixedData.insights.views;
+      syncData.likes = fixedData.insights.likes;
+      syncData.comments = fixedData.insights.comments;
+      syncData.shares = fixedData.insights.shares;
+      syncData.saves = fixedData.insights.saves;
+      syncData.followerViewsPct = fixedData.insights.followerViewsPct;
+      syncData.genderMale = fixedData.insights.genderMale;
+      syncData.viewRatePast3Sec = fixedData.insights.viewRatePast3Sec;
+      syncData.skipRate = fixedData.insights.skipRate;
+      syncData.typicalSkipRate = fixedData.insights.typicalSkipRate;
+      syncData.watchTime = fixedData.insights.watchTime;
+      syncData.avgWatchTime = fixedData.insights.avgWatchTime;
+      syncData.accountsReached = fixedData.insights.accountsReached;
+      syncData.follows = fixedData.insights.follows;
+      syncData.sources = fixedData.insights.sources;
+      syncData.countries = fixedData.insights.countries;
+      syncData.ageGroups = fixedData.insights.ageGroups;
 
       // Read existing Supabase data and merge
       const { data: existing } = await (supabase as any)
@@ -142,7 +160,7 @@ const ReelEditModal = ({ open, onClose, reel, reelIndex, onSave, onDelete }: Ree
         .eq('post_index', reelIndex)
         .maybeSingle();
 
-      const merged = { ...(existing?.data || {}), ...mediaData };
+      const merged = { ...(existing?.data || {}), ...syncData };
       await (supabase as any).from('reels_data').upsert(
         { account: 'just4abhii', post_index: reelIndex, data: merged, updated_at: new Date().toISOString() },
         { onConflict: 'account,post_index' }

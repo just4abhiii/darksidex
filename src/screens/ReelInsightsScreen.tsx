@@ -1,0 +1,1341 @@
+import { useState, useRef, useCallback, useMemo, useEffect } from "react";
+import * as React from "react";
+
+import { ArrowLeft, MoreVertical, Heart, MessageCircle, Send, Bookmark, Repeat2, Info, Pencil, X } from "lucide-react";
+import { useNavigate, useParams } from "react-router-dom";
+import { mockAccounts, currentUser } from "@/data/mockData";
+import { loadReelsData, saveReelsData } from "@/data/reelInsightsData";
+import { cn } from "@/lib/utils";
+import { AreaChart, Area, XAxis, YAxis, ResponsiveContainer, CartesianGrid, ReferenceLine, LineChart, Line } from "recharts";
+import GraphEditorModal from "@/components/GraphEditorModal";
+import RetentionEditorModal from "@/components/RetentionEditorModal";
+import { supabase } from "@/integrations/supabase/client";
+
+// Seeded pseudo-random number generator
+const seededRandom = (seed: number) => {
+  let s = seed;
+  return () => {
+    s = (s * 16807 + 0) % 2147483647;
+    return (s - 1) / 2147483646;
+  };
+};
+
+// Generate nice Y-axis ticks like Instagram: for ~1K → [0, 500, 1K], for ~25K → [0, 15K, 30K]
+const getInstagramYTicks = (maxVal: number): number[] => {
+  if (maxVal <= 0) return [0];
+  // Find a nice "step" so we get 2-3 ticks above 0
+  const rawStep = maxVal / 2;
+  const magnitude = Math.pow(10, Math.floor(Math.log10(rawStep)));
+  const niceSteps = [1, 2, 2.5, 5, 10];
+  let step = magnitude;
+  for (const ns of niceSteps) {
+    if (ns * magnitude >= rawStep) { step = ns * magnitude; break; }
+  }
+  const ticks = [0];
+  let t = step;
+  while (t <= maxVal * 1.3) {
+    ticks.push(t);
+    t += step;
+  }
+  // Keep only 2-3 ticks above 0
+  if (ticks.length > 4) {
+    return getInstagramYTicks(maxVal * 1.1);
+  }
+  return ticks;
+};
+
+// Generate graph: pink line peaks at center (bell curve), gray line flat at top
+const generateOrganicGraph = (totalViews: number, seed: number, startDate: string, typicalTop?: number) => {
+  // Parse start date
+  const months: Record<string, number> = { Jan: 0, Feb: 1, Mar: 2, Apr: 3, May: 4, Jun: 5, Jul: 6, Aug: 7, Sep: 8, Oct: 9, Nov: 10, Dec: 11 };
+  const parts = startDate.trim().split(" ");
+  const day = parseInt(parts[0]) || 1;
+  const monthStr = parts[1] || "Jan";
+  const month = months[monthStr] ?? 0;
+  const baseDate = new Date(2025, month, day);
+
+  const rng = seededRandom(seed + totalViews + 7);
+  const numPoints = 5;
+  const points: { day: string; thisReel: number; typical: number }[] = [];
+  const peak = totalViews;
+  const topVal = typicalTop ?? Math.round(peak * 0.55);
+
+  // Bell curve ratios for pink line with slight randomization
+  const bellBase = [0, 0.55, 1.0, 0.65, 0.15];
+  const typicalBase = [0, 0.45, 0.75, 0.9, 0.95];
+
+  for (let i = 0; i < numPoints; i++) {
+    const dayOffset = i === 0 ? 0 : Math.round((i * 22) / (numPoints - 1));
+    const date = new Date(baseDate);
+    date.setDate(date.getDate() + dayOffset);
+    const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    const label = i === 0 || i === 2 || i === 4 ? `${date.getDate()} ${monthNames[date.getMonth()]}` : "";
+
+    // Add slight variation per reel (±10%)
+    const bellVar = i === 0 ? 0 : bellBase[i] * (0.9 + rng() * 0.2);
+    const typVar = i === 0 ? 0 : typicalBase[i] * (0.85 + rng() * 0.3);
+
+    points.push({
+      day: label,
+      thisReel: Math.round(peak * bellVar),
+      typical: Math.round(topVal * typVar),
+    });
+  }
+
+  return points;
+};
+
+// Helper: compute 3 X-axis date labels from a start date string like "23 Jan"
+const computeXDates = (startDate: string): [string, string, string] => {
+  const months: Record<string, number> = { Jan: 0, Feb: 1, Mar: 2, Apr: 3, May: 4, Jun: 5, Jul: 6, Aug: 7, Sep: 8, Oct: 9, Nov: 10, Dec: 11, January: 0, February: 1, March: 2, April: 3, June: 5, July: 6, August: 7, September: 8, October: 9, November: 10, December: 11 };
+  const parts = startDate.trim().split(" ");
+  const day = parseInt(parts[0]) || 1;
+  const monthStr = parts[1] || "Jan";
+  const month = months[monthStr] ?? months[monthStr.slice(0, 3)] ?? 0;
+  const baseDate = new Date(2025, month, day);
+  const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const offsets = [0, 11, 22]; // indices 0, 2, 4 → dayOffset formula
+  return offsets.map(off => {
+    const d = new Date(baseDate);
+    d.setDate(d.getDate() + off);
+    return `${d.getDate()} ${monthNames[d.getMonth()]}`;
+  }) as [string, string, string];
+};
+
+const ReelInsightsScreen = () => {
+  const navigate = useNavigate();
+  const { id } = useParams();
+  const searchParams = new URLSearchParams(window.location.search);
+  const accountUsername = searchParams.get("account") || "just4abhii";
+  const account = mockAccounts[accountUsername] || mockAccounts["just4abhii"] || Object.values(mockAccounts)[0];
+  const postIndex = parseInt(id || "0");
+
+  const isMainAccount = accountUsername === "just4abhii" || account?.profile === currentUser;
+  const reelsData = isMainAccount ? loadReelsData() : null;
+  const post = isMainAccount && reelsData ? reelsData[postIndex] : null;
+  console.log("[Insights] isMain:", isMainAccount, "postIndex:", postIndex, "graphStartDate:", post?.graphStartDate, "views:", post?.insights?.views, "caption:", post?.caption?.slice(0, 20));
+  const fallbackPost = account?.posts?.[postIndex] || account?.posts?.[0];
+  // Thumbnail: prioritize custom thumbnail, then auto-generate from video URL
+  const getPostImage = () => {
+    if (post?.thumbnail) return post.thumbnail;
+    if (post?.videoUrl?.includes("streamable.com")) {
+      const idMatch = post.videoUrl.match(/streamable\.com\/(?:e\/|o\/)?([a-zA-Z0-9]+)/);
+      const videoId = idMatch ? idMatch[1] : post.videoUrl.split("/").pop();
+      return `https://cdn-cf-east.streamable.com/image/${videoId}.jpg`;
+    }
+    return fallbackPost?.thumbnail;
+  };
+  const postImage = getPostImage();
+
+  // Get insights data
+  const ins = post?.insights || null;
+
+  const [viewsFilter, setViewsFilter] = useState("All");
+  const filterOrder = ["All", "Followers", "Non-followers"];
+  const [audienceTab, setAudienceTab] = useState("Gender");
+
+  // Editable state - all values can be long-pressed to edit
+  const [editViews, setEditViews] = useState(ins?.views || 1000);
+  const [editLikes, setEditLikes] = useState(ins?.likes || 69);
+  const [editComments, setEditComments] = useState(ins?.comments || 11);
+  const [editShares, setEditShares] = useState(ins?.shares || 2);
+  const [editSaves, setEditSaves] = useState(ins?.saves || 8);
+  const [editFollowerPct, setEditFollowerPct] = useState(ins?.followerViewsPct || 89);
+  const [editGenderMale, setEditGenderMale] = useState(ins?.genderMale || 92);
+  const [editViewRate, setEditViewRate] = useState(ins?.viewRatePast3Sec || 42);
+  const [editStartDate, setEditStartDate] = useState(post?.graphStartDate || ins?.viewsOverTime?.[0]?.day || "23 Jan");
+  const [editDisplayDate, setEditDisplayDate] = useState(post?.graphStartDate || "5 February");
+  const [editDuration, setEditDuration] = useState(post?.duration || "0:10");
+  const [graphEditorOpen, setGraphEditorOpen] = useState(false);
+  const [customGraphData, setCustomGraphData] = useState<{ day: string; thisReel: number; typical: number }[] | null>(null);
+  const [editTypicalTop, setEditTypicalTop] = useState(Math.round((ins?.views || 1000) * 0.55));
+
+  // Watch time editable state
+  const [editWatchTime, setEditWatchTime] = useState(ins?.watchTime || "1h 3m 53s");
+  const [editAvgWatchTime, setEditAvgWatchTime] = useState(ins?.avgWatchTime || "6 sec");
+
+  // Retention state
+  const [editSkipRate, setEditSkipRate] = useState(ins?.skipRate ?? 28.2);
+  const [editTypicalSkipRate, setEditTypicalSkipRate] = useState(ins?.typicalSkipRate ?? 54.7);
+  const [editRetentionCurve, setEditRetentionCurve] = useState<{ t: string; pct: number }[]>(
+    ins?.retentionCurve || [
+      { t: "0:00", pct: 100 },
+      { t: "", pct: 68 },
+      { t: "0:12", pct: 42 },
+      { t: "", pct: 2 },
+      { t: "0:19", pct: 2 },
+    ]
+  );
+  const [typicalRetentionCurve, setTypicalRetentionCurve] = useState<{ t: string; pct: number }[]>(
+    ins?.typicalRetentionCurve || [
+      { t: "0:00", pct: 100 },
+      { t: "", pct: 55 },
+      { t: "", pct: 32 },
+      { t: "", pct: 15 },
+      { t: "0:19", pct: 8 },
+    ]
+  );
+  const [retentionEditorOpen, setRetentionEditorOpen] = useState(false);
+  const [editYCenter, setEditYCenter] = useState(post?.yCenter ?? 500);
+  const [editYTop, setEditYTop] = useState(post?.yTop ?? 1000);
+
+
+  // Prefer saved viewsOverTime labels (e.g. "0", "12h", "24h") over computed dates
+  const [editXDate1, setEditXDate1] = useState(() => {
+    const vot = ins?.viewsOverTime;
+    if (vot && vot.length >= 5 && vot[0].day) return vot[0].day;
+    const dates = computeXDates(post?.graphStartDate || vot?.[0]?.day || "23 Jan");
+    return dates[0];
+  });
+  const [editXDate2, setEditXDate2] = useState(() => {
+    const vot = ins?.viewsOverTime;
+    if (vot && vot.length >= 5 && vot[2].day) return vot[2].day;
+    const dates = computeXDates(post?.graphStartDate || vot?.[0]?.day || "23 Jan");
+    return dates[1];
+  });
+  const [editXDate3, setEditXDate3] = useState(() => {
+    const vot = ins?.viewsOverTime;
+    if (vot && vot.length >= 5 && vot[4].day) return vot[4].day;
+    const dates = computeXDates(post?.graphStartDate || vot?.[0]?.day || "23 Jan");
+    return dates[2];
+  });
+  const [timeRangeMode, setTimeRangeMode] = useState<"custom" | "12h" | "24h">("custom");
+
+  // ── Supabase: save all editable state ──────────────────────────────────────
+  const saveToSupabase = useCallback(async (overrides?: Record<string, unknown>) => {
+    const data = {
+      views: editViews, likes: editLikes, comments: editComments,
+      shares: editShares, saves: editSaves,
+      followerViewsPct: editFollowerPct, genderMale: editGenderMale,
+      viewRatePast3Sec: editViewRate,
+      graphStartDate: editStartDate, displayDate: editDisplayDate,
+      duration: editDuration,
+      watchTime: editWatchTime, avgWatchTime: editAvgWatchTime,
+      skipRate: editSkipRate, typicalSkipRate: editTypicalSkipRate,
+      retentionCurve: editRetentionCurve,
+      typicalRetentionCurve,
+      customGraphData,
+      yCenter: editYCenter, yTop: editYTop,
+      editTypicalTop,
+      xDate1: editXDate1, xDate2: editXDate2, xDate3: editXDate3,
+      timeRangeMode,
+      ...overrides,
+    };
+    await (supabase as any).from('reels_data').upsert(
+      { account: accountUsername, post_index: postIndex, data, updated_at: new Date().toISOString() },
+      { onConflict: 'account,post_index' }
+    );
+  }, [
+    editViews, editLikes, editComments, editShares, editSaves,
+    editFollowerPct, editGenderMale, editViewRate,
+    editStartDate, editDisplayDate, editDuration,
+    editWatchTime, editAvgWatchTime,
+    editSkipRate, editTypicalSkipRate, editRetentionCurve, typicalRetentionCurve,
+    customGraphData, editYCenter, editYTop, editTypicalTop,
+    editXDate1, editXDate2, editXDate3, timeRangeMode,
+    accountUsername, postIndex,
+  ]);
+
+  // ── Load from Supabase on mount ────────────────────────────────────────────
+  useEffect(() => {
+    (async () => {
+      const { data: rows } = await (supabase as any)
+        .from('reels_data')
+        .select('data')
+        .eq('account', accountUsername)
+        .eq('post_index', postIndex)
+        .maybeSingle();
+      if (!rows?.data) return;
+      const d = rows.data as Record<string, unknown>;
+      if (d.views != null) setEditViews(d.views as number);
+      if (d.likes != null) setEditLikes(d.likes as number);
+      if (d.comments != null) setEditComments(d.comments as number);
+      if (d.shares != null) setEditShares(d.shares as number);
+      if (d.saves != null) setEditSaves(d.saves as number);
+      if (d.followerViewsPct != null) setEditFollowerPct(d.followerViewsPct as number);
+      if (d.genderMale != null) setEditGenderMale(d.genderMale as number);
+      if (d.viewRatePast3Sec != null) setEditViewRate(d.viewRatePast3Sec as number);
+      if (d.graphStartDate) setEditStartDate(d.graphStartDate as string);
+      if (d.displayDate) setEditDisplayDate(d.displayDate as string);
+      if (d.duration) setEditDuration(d.duration as string);
+      if (d.watchTime) setEditWatchTime(d.watchTime as string);
+      if (d.avgWatchTime) setEditAvgWatchTime(d.avgWatchTime as string);
+      if (d.skipRate != null) setEditSkipRate(d.skipRate as number);
+      if (d.typicalSkipRate != null) setEditTypicalSkipRate(d.typicalSkipRate as number);
+      if (d.retentionCurve) setEditRetentionCurve(d.retentionCurve as { t: string; pct: number }[]);
+      if (d.typicalRetentionCurve) setTypicalRetentionCurve(d.typicalRetentionCurve as { t: string; pct: number }[]);
+      if (d.customGraphData) setCustomGraphData(d.customGraphData as { day: string; thisReel: number; typical: number }[]);
+      if (d.yCenter != null) setEditYCenter(d.yCenter as number);
+      if (d.yTop != null) setEditYTop(d.yTop as number);
+      if (d.editTypicalTop != null) setEditTypicalTop(d.editTypicalTop as number);
+      if (d.xDate1) setEditXDate1(d.xDate1 as string);
+      if (d.xDate2) setEditXDate2(d.xDate2 as string);
+      if (d.xDate3) setEditXDate3(d.xDate3 as string);
+      if (d.timeRangeMode) setTimeRangeMode(d.timeRangeMode as 'custom' | '12h' | '24h');
+    })();
+  }, [accountUsername, postIndex]);
+  // If saved viewsOverTime has custom labels at ANY of the 3 positions, mark as manually edited
+  const hasCustomLabels = (() => {
+    const vot = ins?.viewsOverTime;
+    if (!vot || vot.length < 5) return false;
+    const computed = computeXDates(post?.graphStartDate || vot[0]?.day || "23 Jan");
+    return (vot[0].day && vot[0].day !== computed[0]) ||
+      (vot[2].day && vot[2].day !== computed[1]) ||
+      (vot[4].day && vot[4].day !== computed[2]);
+  })();
+  const xDatesManuallyEdited = useRef(!!hasCustomLabels);
+
+  // Sync X-axis dates when editStartDate changes (from display date edit) — skip if user manually edited
+  useEffect(() => {
+    if (timeRangeMode === "custom" && !xDatesManuallyEdited.current) {
+      const newDates = computeXDates(editStartDate);
+      setEditXDate1(newDates[0]);
+      setEditXDate2(newDates[1]);
+      setEditXDate3(newDates[2]);
+    }
+  }, [editStartDate]);
+
+  // Edit modal state
+  const [editModal, setEditModal] = useState<{ label: string; value: string; onSave: (v: number) => void; isText?: boolean } | null>(null);
+  const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const longPressTriggered = useRef(false);
+
+  const startLongPress = useCallback((label: string, currentValue: number, onSave: (v: number) => void) => {
+    longPressTriggered.current = false;
+    longPressTimer.current = setTimeout(() => {
+      longPressTriggered.current = true;
+      setEditModal({ label, value: String(currentValue), onSave });
+    }, 800);
+  }, []);
+
+  const endLongPress = useCallback(() => {
+    if (longPressTimer.current) clearTimeout(longPressTimer.current);
+  }, []);
+
+  // Use editable values
+  const views = editViews;
+  const likes = editLikes;
+  const comments = editComments;
+  const shares = editShares;
+  const saves = editSaves;
+  const followerPct = editFollowerPct;
+  const nonFollowerPct = 100 - followerPct;
+  const viewRate = editViewRate;
+  const genderMale = editGenderMale;
+  const genderFemale = 100 - genderMale;
+  const watchTime = editWatchTime;
+  const avgWatchTime = editAvgWatchTime;
+  const countries = ins?.countries || [
+    { name: "India", pct: 54.1 }, { name: "Iran", pct: 19.9 }, { name: "Uzbekistan", pct: 5.7 }, { name: "Türkiye", pct: 2.6 }, { name: "Kazakhstan", pct: 1.6 },
+  ];
+  const ageGroups = ins?.ageGroups || [
+    { range: "13-17", pct: 32.3 }, { range: "18-24", pct: 35.9 }, { range: "25-34", pct: 20.2 }, { range: "35-44", pct: 7.1 }, { range: "45-54", pct: 2.3 }, { range: "55-64", pct: 0.8 }, { range: "65+", pct: 1.4 },
+  ];
+  const sources = ins?.sources || [
+    { name: "Feed", pct: 63.4 }, { name: "Reels tab", pct: 11.1 }, { name: "Stories", pct: 10.6 }, { name: "Explore", pct: 7.4 }, { name: "Profile", pct: 6.0 },
+  ];
+  const accountsReached = ins?.accountsReached || 567;
+  const follows = ins?.follows || 0;
+
+  // Generate separate graphs for All, Followers, Non-followers
+  // customGraphData = user-drawn graph (Draw ON + save). Otherwise auto-generate from views count.
+  // Compute effective X-axis labels based on time range mode
+  const effectiveXLabels = useMemo(() => {
+    if (timeRangeMode === "12h") {
+      return ["0h", "6h", "12h"];
+    }
+    if (timeRangeMode === "24h") {
+      return ["0h", "12h", "24h"];
+    }
+    return [editXDate1, editXDate2, editXDate3];
+  }, [timeRangeMode, editXDate1, editXDate2, editXDate3]);
+
+  const viewsOverTimeAll = useMemo(() => {
+    if (customGraphData) {
+      // Override day labels with effective labels
+      const labeled = customGraphData.map((d, i) => {
+        const labelIdx = i === 0 ? 0 : i === 2 ? 1 : i === 4 ? 2 : -1;
+        return { ...d, day: labelIdx >= 0 ? effectiveXLabels[labelIdx] : "" };
+      });
+      return labeled;
+    }
+    // Auto-generate, then override labels
+    const generated = generateOrganicGraph(editViews, postIndex, editStartDate, editTypicalTop);
+    return generated.map((d, i) => {
+      const labelIdx = i === 0 ? 0 : i === 2 ? 1 : i === 4 ? 2 : -1;
+      return { ...d, day: labelIdx >= 0 ? effectiveXLabels[labelIdx] : "" };
+    });
+  }, [customGraphData, editViews, postIndex, editStartDate, editTypicalTop, effectiveXLabels]);
+
+  const viewsOverTimeFollowers = useMemo(() => {
+    const ratio = followerPct / 100;
+    return viewsOverTimeAll.map(d => ({ ...d, thisReel: Math.round(d.thisReel * ratio), typical: Math.round(d.typical * ratio) }));
+  }, [viewsOverTimeAll, followerPct]);
+
+  const viewsOverTimeNonFollowers = useMemo(() => {
+    const ratio = nonFollowerPct / 100;
+    return viewsOverTimeAll.map(d => ({ ...d, thisReel: Math.round(d.thisReel * ratio), typical: Math.round(d.typical * ratio) }));
+  }, [viewsOverTimeAll, nonFollowerPct]);
+
+  const viewsOverTime = viewsFilter === "Followers" ? viewsOverTimeFollowers
+    : viewsFilter === "Non-followers" ? viewsOverTimeNonFollowers
+      : viewsOverTimeAll;
+
+  const totalInteractions = likes + comments + shares + saves;
+  const fmtNum = (n: number) => n >= 1000 ? n.toLocaleString() : String(n);
+
+  // Persist current edits back to localStorage
+  const persistEdits = useCallback(() => {
+    if (!isMainAccount) return;
+    const freshData = loadReelsData();
+    const reel = freshData[postIndex];
+    if (!reel) return;
+    reel.insights = {
+      ...reel.insights,
+      views: editViews,
+      likes: editLikes,
+      comments: editComments,
+      shares: editShares,
+      saves: editSaves,
+      followerViewsPct: editFollowerPct,
+      genderMale: editGenderMale,
+      genderFemale: 100 - editGenderMale,
+      viewRatePast3Sec: editViewRate,
+      skipRate: editSkipRate,
+      typicalSkipRate: editTypicalSkipRate,
+      retentionCurve: editRetentionCurve,
+      watchTime: editWatchTime,
+      avgWatchTime: editAvgWatchTime,
+    };
+    reel.graphStartDate = editStartDate;
+    reel.duration = editDuration;
+    // Save custom X-axis labels into viewsOverTime
+    if (reel.insights.viewsOverTime && reel.insights.viewsOverTime.length >= 5) {
+      reel.insights.viewsOverTime[0].day = editXDate1;
+      reel.insights.viewsOverTime[2].day = editXDate2;
+      reel.insights.viewsOverTime[4].day = editXDate3;
+    }
+    if (customGraphData) {
+      reel.insights.viewsOverTime = customGraphData.map((d, i) => {
+        const labelIdx = i === 0 ? 0 : i === 2 ? 1 : i === 4 ? 2 : -1;
+        return { ...d, day: labelIdx === 0 ? editXDate1 : labelIdx === 1 ? editXDate2 : labelIdx === 2 ? editXDate3 : d.day };
+      });
+    }
+    reel.yCenter = editYCenter;
+    reel.yTop = editYTop;
+    freshData[postIndex] = reel;
+    saveReelsData(freshData);
+    console.log("[InsightsPersist] Saved edits for reel", postIndex);
+  }, [isMainAccount, postIndex, editViews, editLikes, editComments, editShares, editSaves, editFollowerPct, editGenderMale, editViewRate, editStartDate, editDuration, editXDate1, editXDate2, editXDate3, customGraphData, editYCenter, editYTop, editSkipRate, editTypicalSkipRate, editRetentionCurve, editWatchTime, editAvgWatchTime]);
+
+  // Auto-persist edits to localStorage (skip initial mount)
+  const hasMounted = useRef(false);
+  useEffect(() => {
+    if (!hasMounted.current) {
+      hasMounted.current = true;
+      return;
+    }
+    const timer = setTimeout(() => persistEdits(), 100);
+    return () => clearTimeout(timer);
+  }, [persistEdits]);
+
+  const [loading, setLoading] = useState(true);
+
+  // Simulate brief loading like Instagram
+  useEffect(() => {
+    const timer = setTimeout(() => setLoading(false), 600);
+    return () => clearTimeout(timer);
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="pb-20 min-h-screen bg-background">
+        <header className="sticky top-0 z-40 flex items-center justify-between px-4 py-3.5 bg-background">
+          <div className="flex items-center gap-5">
+            <button onClick={() => navigate('/profile')} className="text-foreground">
+              <ArrowLeft size={22} strokeWidth={1.8} />
+            </button>
+            <h1 className="text-[17px] font-semibold text-foreground">Reel insights</h1>
+          </div>
+        </header>
+        <div className="flex-1 flex items-center justify-center" style={{ minHeight: 'calc(100vh - 60px)' }}>
+          <div className="h-7 w-7 rounded-full border-[1.5px] border-muted-foreground/25 border-t-muted-foreground/60 animate-spin" />
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="pb-20 min-h-screen bg-background">
+      {/* Header */}
+      <header className="sticky top-0 z-40 flex items-center justify-between px-4 py-3.5 bg-background">
+        <div className="flex items-center gap-5">
+          <button onClick={() => navigate('/profile')} className="text-foreground">
+            <ArrowLeft size={22} strokeWidth={1.8} />
+          </button>
+          <h1 className="text-[17px] font-semibold text-foreground">Reel insights</h1>
+        </div>
+        <button className="text-foreground">
+          <MoreVertical size={20} />
+        </button>
+      </header>
+
+      {/* Reel Preview */}
+      <div className="flex flex-col items-center py-6 px-4">
+        <div className="w-[160px] rounded-lg overflow-hidden shadow-lg relative">
+          <img src={postImage} alt="Reel thumbnail" className="w-full aspect-[9/16] object-cover" />
+
+        </div>
+        <p className="mt-4 text-[14px] text-foreground text-center leading-[20px] whitespace-pre-wrap break-words w-full px-2">{post?.caption || "❤️🤍..."}</p>
+        <p
+          className="text-[12px] text-muted-foreground mt-2.5 cursor-pointer active:opacity-60"
+          onClick={() => {
+            setEditModal({
+              label: "Date & Duration (e.g. 5 February · Duration 0:10)",
+              value: `${editDisplayDate} · Duration ${editDuration}`,
+              onSave: ((v: any) => {
+                const str = String(v).trim();
+                // Try multiple separator patterns: · or . or - or just space before Duration
+                const match = str.match(/^(.+?)\s*[·.\-]\s*Duration\s+(.+)$/i)
+                  || str.match(/^(.+?)\s+Duration\s+(.+)$/i);
+                const dateStr = match ? match[1].trim() : str;
+                setEditDisplayDate(dateStr);
+                if (match) {
+                  setEditDuration(match[2].trim());
+                }
+                // Convert date to short format for graph
+                const monthMap: Record<string, string> = { January: "Jan", February: "Feb", March: "Mar", April: "Apr", May: "May", June: "Jun", July: "Jul", August: "Aug", September: "Sep", October: "Oct", November: "Nov", December: "Dec" };
+                const dm = dateStr.match(/^(\d{1,2})\s+(\w+)$/);
+                if (dm) {
+                  const shortMonth = monthMap[dm[2]] || dm[2].slice(0, 3);
+                  const newStart = `${dm[1]} ${shortMonth}`;
+                  setEditStartDate(newStart);
+                  // Directly compute and set all 3 X-axis dates
+                  const newDates = computeXDates(newStart);
+                  setEditXDate1(newDates[0]);
+                  setEditXDate2(newDates[1]);
+                  setEditXDate3(newDates[2]);
+                }
+              }) as any,
+            });
+          }}
+        >
+          {editDisplayDate} · Duration {editDuration}
+        </p>
+      </div>
+
+      {/* Engagement Stats */}
+      <div className="flex justify-around px-4 py-4 border-b border-border">
+        {/* Heart */}
+        <div className="flex flex-col items-center gap-1.5">
+          <Heart size={24} className="text-foreground fill-foreground" />
+          <span className="text-[13px] font-medium text-foreground">{fmtNum(likes)}</span>
+        </div>
+        {/* Comment — flipped */}
+        <div className="flex flex-col items-center gap-1.5">
+          <MessageCircle size={24} className="text-foreground fill-foreground -scale-x-100" />
+          <span className="text-[13px] font-medium text-foreground">{fmtNum(comments)}</span>
+        </div>
+        {/* Send */}
+        <div className="flex flex-col items-center gap-1.5">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="text-foreground">
+            <path d="M22 2L11 13" />
+            <path d="M22 2L15 22L11 13L2 9L22 2Z" />
+          </svg>
+          <span className="text-[13px] font-medium text-foreground">{fmtNum(shares)}</span>
+        </div>
+        {/* Repost — custom SVG matching Instagram */}
+        <div className="flex flex-col items-center gap-1.5">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-foreground">
+            <polyline points="17 1 21 5 17 9" />
+            <path d="M3 12V9a4 4 0 0 1 4-4h14" />
+            <polyline points="7 23 3 19 7 15" />
+            <path d="M21 12v3a4 4 0 0 1-4 4H3" />
+          </svg>
+          <span className="text-[13px] font-medium text-foreground">{fmtNum(ins?.reposts || 0)}</span>
+        </div>
+        {/* Bookmark */}
+        <div className="flex flex-col items-center gap-1.5">
+          <Bookmark size={24} className="text-foreground fill-foreground" />
+          <span className="text-[13px] font-medium text-foreground">{fmtNum(saves)}</span>
+        </div>
+      </div>
+
+      <div className="h-[6px] bg-secondary" />
+
+      {/* Overview */}
+      <div className="px-4 py-5">
+        <div className="flex items-center gap-2 mb-5">
+          <h2 className="text-[18px] font-bold text-foreground">Overview</h2>
+          <Info size={16} className="text-muted-foreground" />
+        </div>
+        <div className="space-y-4">
+          {[
+            { label: "Views", value: fmtNum(views) },
+            { label: "Watch time", value: watchTime },
+            { label: "Interactions", value: fmtNum(totalInteractions) },
+            { label: "Profile activity", value: fmtNum(follows) },
+          ].map((item) => (
+            <div key={item.label} className="flex items-center justify-between">
+              <span className="text-[15px] text-foreground">{item.label}</span>
+              <span className="text-[15px] text-foreground">{item.value}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="h-[6px] bg-secondary" />
+
+      {/* Views Donut */}
+      <div className="px-4 py-5">
+        <div className="flex items-center gap-2 mb-4">
+          <h2 className="text-[18px] font-bold text-foreground">Views</h2>
+          <Info size={16} className="text-muted-foreground" />
+        </div>
+        <div className="flex justify-center py-4">
+          <div className="relative w-[200px] h-[200px]">
+            <svg viewBox="0 0 200 200" className="w-full h-full -rotate-90">
+              <circle cx="100" cy="100" r="82" fill="none" stroke="hsl(var(--border))" strokeWidth="10" />
+              <circle cx="100" cy="100" r="82" fill="none" stroke="#E040FB" strokeWidth="10"
+                strokeDasharray={`${(followerPct / 100) * 2 * Math.PI * 82} ${2 * Math.PI * 82}`}
+                strokeLinecap="round" />
+              <circle cx="100" cy="100" r="82" fill="none" stroke="#7C4DFF" strokeWidth="10"
+                strokeDasharray={`${(nonFollowerPct / 100) * 2 * Math.PI * 82} ${2 * Math.PI * 82}`}
+                strokeDashoffset={`${-(followerPct / 100) * 2 * Math.PI * 82}`}
+                strokeLinecap="round" />
+            </svg>
+            <div
+              className="absolute inset-0 flex flex-col items-center justify-center cursor-pointer select-none"
+              onContextMenu={(e) => e.preventDefault()}
+              onTouchStart={() => startLongPress("Views", views, setEditViews)}
+              onTouchEnd={endLongPress}
+              onTouchCancel={endLongPress}
+              onMouseDown={() => startLongPress("Views", views, setEditViews)}
+              onMouseUp={endLongPress}
+              onMouseLeave={endLongPress}
+            >
+              <span className="text-[13px] text-muted-foreground">Views</span>
+              <span className="text-[32px] font-bold text-foreground">{fmtNum(views)}</span>
+            </div>
+          </div>
+        </div>
+        <div className="space-y-2 mt-2">
+          <div
+            className="flex items-center justify-between cursor-pointer select-none"
+            onContextMenu={(e) => e.preventDefault()}
+            onTouchStart={() => startLongPress("Followers %", followerPct, (v) => setEditFollowerPct(Math.min(100, v)))}
+            onTouchEnd={endLongPress}
+            onTouchCancel={endLongPress}
+            onMouseDown={() => startLongPress("Followers %", followerPct, (v) => setEditFollowerPct(Math.min(100, v)))}
+            onMouseUp={endLongPress}
+            onMouseLeave={endLongPress}
+          >
+            <div className="flex items-center gap-2">
+              <div className="h-2.5 w-2.5 rounded-full bg-[#E040FB]" />
+              <span className="text-[14px] text-foreground">Followers</span>
+            </div>
+            <span className="text-[14px] text-foreground">{followerPct.toFixed(1)}%</span>
+          </div>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className="h-2.5 w-2.5 rounded-full bg-[#7C4DFF]" />
+              <span className="text-[14px] text-foreground">Non-followers</span>
+            </div>
+            <span className="text-[14px] text-foreground">{nonFollowerPct.toFixed(1)}%</span>
+          </div>
+        </div>
+      </div>
+
+      <div className="border-t border-border mx-4" />
+
+      {/* Views over time */}
+      <div className="px-4 py-5">
+        <div className="flex items-center justify-between mb-3">
+          <h3
+            className="text-[16px] font-bold text-foreground cursor-pointer select-none"
+            onContextMenu={(e) => e.preventDefault()}
+            onTouchStart={() => {
+              longPressTriggered.current = false;
+              longPressTimer.current = setTimeout(() => {
+                longPressTriggered.current = true;
+                setGraphEditorOpen(true);
+              }, 2300);
+            }}
+            onTouchEnd={endLongPress}
+            onTouchCancel={endLongPress}
+            onMouseDown={() => {
+              longPressTriggered.current = false;
+              longPressTimer.current = setTimeout(() => {
+                longPressTriggered.current = true;
+                setGraphEditorOpen(true);
+              }, 2300);
+            }}
+            onMouseUp={endLongPress}
+            onMouseLeave={endLongPress}
+          >Views over time</h3>
+        </div>
+        <div className="flex gap-2 mb-4">
+          {["All", "Followers", "Non-followers"].map((f) => (
+            <button
+              key={f}
+              onClick={() => setViewsFilter(f)}
+              className={cn(
+                "rounded-full px-4 py-1.5 text-[13px] font-medium border transition-colors",
+                viewsFilter === f
+                  ? "bg-muted text-foreground border-border"
+                  : "bg-background text-foreground border-border"
+              )}
+            >
+              {f}
+            </button>
+          ))}
+        </div>
+        <div className="h-44 overflow-hidden relative">
+          <div
+            className="flex transition-transform duration-300 ease-in-out h-full"
+            style={{ width: '300%', transform: `translateX(-${filterOrder.indexOf(viewsFilter) * (100 / 3)}%)` }}
+          >
+            {[viewsOverTimeAll, viewsOverTimeFollowers, viewsOverTimeNonFollowers].map((data, gi) => (
+              <div key={gi} className="h-full" style={{ width: `${100 / 3}%` }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={data} margin={{ top: 5, right: 5, left: -5, bottom: 0 }}>
+                    <defs>
+                      <linearGradient id={`reelGrad${gi}`} x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="#E040FB" stopOpacity={0.1} />
+                        <stop offset="100%" stopColor="#E040FB" stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
+                    {(() => {
+                      const ratios = [1, followerPct / 100, nonFollowerPct / 100];
+                      const r = ratios[gi];
+                      const centerVal = Math.round(editYCenter * r);
+                      const topVal = Math.round(editYTop * r);
+                      const yTicks = [0, centerVal, topVal];
+                      const yDomain = [0, topVal];
+                      return (
+                        <>
+                          <CartesianGrid horizontal={false} vertical={false} />
+                          <XAxis dataKey="day" fontSize={11} tickLine={false} axisLine={false} tick={{ fill: 'hsl(var(--muted-foreground))' }} />
+                          <YAxis fontSize={11} tickLine={false} axisLine={false} width={40} allowDataOverflow={true} tick={{ fill: 'hsl(var(--muted-foreground))' }} domain={yDomain} ticks={yTicks} tickCount={3} tickFormatter={(v: number) => { if (v === 0) return '0'; if (v >= 1000) { const k = v / 1000; return k % 1 === 0 ? `${k}K` : `${k.toFixed(1)}K`; } return String(v); }} />
+                          <ReferenceLine y={0} stroke="hsl(var(--border))" strokeOpacity={0.4} />
+                          <ReferenceLine y={centerVal} stroke="hsl(var(--border))" strokeOpacity={0.4} />
+                          <ReferenceLine y={topVal} stroke="hsl(var(--border))" strokeOpacity={0.4} />
+                        </>
+                      );
+                    })()}
+                    <Area type="monotone" dataKey="thisReel" stroke="#E040FB" fill="none" strokeWidth={3} dot={false} />
+                    <Area type="monotone" dataKey="typical" stroke="#9CA3AF" fill="none" strokeWidth={2.5} strokeDasharray="8 6" dot={false} />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div className="flex items-center justify-center gap-6 mt-2">
+          <div className="flex items-center gap-1.5">
+            <div className="h-2 w-2 rounded-full bg-[#E040FB]" />
+            <span className="text-[12px] text-muted-foreground">This reel</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <div className="h-2 w-2 rounded-full bg-[#9CA3AF]" />
+            <span className="text-[12px] text-muted-foreground">Your typical reel views</span>
+          </div>
+        </div>
+
+      </div>
+
+      <div className="h-[6px] bg-secondary" />
+
+      {/* Top sources */}
+      <div className="px-4 py-5">
+        <h3 className="text-[16px] font-bold text-foreground mb-4">Top sources of views</h3>
+        <div className="space-y-2">
+          {sources.map((item) => (
+            <div key={item.name}>
+              <span className="text-[11px] text-foreground block mb-1">{item.name}</span>
+              <div className="flex items-center gap-2">
+                <div className="flex-1 h-[8px] rounded-full bg-secondary/50 overflow-hidden">
+                  <div className="h-full ig-bar-gradient" style={{ width: `${item.pct}%` }} />
+                </div>
+                <span className="text-[11px] text-foreground w-[36px] text-right">{item.pct}%</span>
+              </div>
+            </div>
+          ))}
+        </div>
+        <div className="border-t border-border mt-5 pt-4 flex items-center justify-between">
+          <span className="text-[14px] text-foreground">Accounts reached</span>
+          <span className="text-[14px] text-foreground">{fmtNum(accountsReached)}</span>
+        </div>
+      </div>
+
+      <div className="h-[6px] bg-secondary" />
+
+      {/* Watch time */}
+      <div className="px-4 py-5">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <h3 className="text-[16px] font-bold text-foreground">Watch time</h3>
+            <Info size={14} className="text-muted-foreground" />
+          </div>
+          <span className="text-[16px] font-bold text-foreground">{watchTime}</span>
+        </div>
+        <div className="flex items-center justify-between mt-3">
+          <span className="text-[14px] text-foreground">Average watch time</span>
+          <span className="text-[14px] text-foreground">{avgWatchTime}</span>
+        </div>
+      </div>
+
+      <div className="h-[6px] bg-secondary" />
+
+      {/* ── Retention ── */}
+      <div className="px-4 py-5">
+        {/* Header */}
+        <div className="flex items-center gap-2 mb-5">
+          <h3 className="text-[16px] font-bold text-foreground">Retention</h3>
+          <Info size={14} className="text-muted-foreground" />
+        </div>
+
+        {/* Phone mockup with thumbnail */}
+        <div className="flex justify-center mb-4">
+          <div className="relative w-[100px] h-[178px] rounded-[18px] overflow-hidden bg-black shadow-lg">
+            <img
+              src={postImage}
+              alt="Reel thumbnail"
+              className="w-full h-full object-cover"
+            />
+            {/* overlay gradient */}
+            <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent" />
+            {/* centered play triangle - border only, no circle */}
+            <div className="absolute inset-0 flex items-center justify-center">
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinejoin="round">
+                <polygon points="6,3 21,12 6,21" />
+              </svg>
+            </div>
+          </div>
+        </div>
+
+        {/* Retention line chart — long-press 2s to edit */}
+        <div
+          className="relative h-[150px] select-none"
+          onContextMenu={(e) => e.preventDefault()}
+          onTouchStart={() => {
+            longPressTriggered.current = false;
+            longPressTimer.current = setTimeout(() => {
+              longPressTriggered.current = true;
+              setRetentionEditorOpen(true);
+            }, 2000);
+          }}
+          onTouchEnd={endLongPress}
+          onTouchCancel={endLongPress}
+          onMouseDown={() => {
+            longPressTriggered.current = false;
+            longPressTimer.current = setTimeout(() => {
+              longPressTriggered.current = true;
+              setRetentionEditorOpen(true);
+            }, 2000);
+          }}
+          onMouseUp={endLongPress}
+          onMouseLeave={endLongPress}
+        >
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart data={editRetentionCurve} margin={{ top: 5, right: 5, left: -5, bottom: 0 }}>
+              <CartesianGrid horizontal={true} vertical={false} stroke="hsl(var(--border))" strokeOpacity={0.3} />
+              <XAxis dataKey="t" fontSize={10} tickLine={false} axisLine={false} tick={{ fill: 'hsl(var(--muted-foreground))' }} />
+              <YAxis fontSize={10} tickLine={false} axisLine={false} width={46} domain={[0, 100]} ticks={[0, 50, 100]} tickFormatter={(v: number) => v === 0 ? '0' : `${v}%`} tick={{ fill: 'hsl(var(--muted-foreground))' }} />
+              <Line type="linear" dataKey="pct" stroke="#E040FB" strokeWidth={3} dot={false} />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+
+        {/* Divider */}
+        <div className="border-t border-border my-4" />
+
+        {/* Skip rate */}
+        <h4 className="text-[15px] font-bold text-foreground mb-3">Skip rate</h4>
+        <div
+          className="flex items-center justify-between py-1 cursor-pointer select-none"
+          onContextMenu={(e) => e.preventDefault()}
+          onTouchStart={() => startLongPress("This reel's skip rate (%)", editSkipRate, (v) => setEditSkipRate(Math.min(100, v)))}
+          onTouchEnd={endLongPress}
+          onTouchCancel={endLongPress}
+          onMouseDown={() => startLongPress("This reel's skip rate (%)", editSkipRate, (v) => setEditSkipRate(Math.min(100, v)))}
+          onMouseUp={endLongPress}
+          onMouseLeave={endLongPress}
+        >
+          <span className="text-[14px] text-foreground">This reel's skip rate</span>
+          <span className="text-[14px] text-foreground">{editSkipRate.toFixed(1)}%</span>
+        </div>
+        <div
+          className="flex items-center justify-between py-1 cursor-pointer select-none"
+          onContextMenu={(e) => e.preventDefault()}
+          onTouchStart={() => startLongPress("Your typical skip rate (%)", editTypicalSkipRate, (v) => setEditTypicalSkipRate(Math.min(100, v)))}
+          onTouchEnd={endLongPress}
+          onTouchCancel={endLongPress}
+          onMouseDown={() => startLongPress("Your typical skip rate (%)", editTypicalSkipRate, (v) => setEditTypicalSkipRate(Math.min(100, v)))}
+          onMouseUp={endLongPress}
+          onMouseLeave={endLongPress}
+        >
+          <span className="text-[14px] text-foreground">Your typical skip rate</span>
+          <span className="text-[14px] text-foreground">{editTypicalSkipRate.toFixed(1)}%</span>
+        </div>
+
+        {/* Divider */}
+        <div className="border-t border-border my-4" />
+
+        {/* Watch time rows */}
+        <div
+          className="flex items-center justify-between py-1 cursor-pointer select-none"
+          onContextMenu={(e) => e.preventDefault()}
+          onTouchStart={() => {
+            longPressTriggered.current = false;
+            longPressTimer.current = setTimeout(() => {
+              longPressTriggered.current = true;
+              setEditModal({
+                label: "Watch time (e.g. 4h 49m 17s)",
+                value: editWatchTime,
+                isText: true,
+                onSave: ((v: any) => setEditWatchTime(String(v))) as any,
+              });
+            }, 800);
+          }}
+          onTouchEnd={endLongPress}
+          onTouchCancel={endLongPress}
+          onMouseDown={() => {
+            longPressTriggered.current = false;
+            longPressTimer.current = setTimeout(() => {
+              longPressTriggered.current = true;
+              setEditModal({
+                label: "Watch time (e.g. 4h 49m 17s)",
+                value: editWatchTime,
+                isText: true,
+                onSave: ((v: any) => setEditWatchTime(String(v))) as any,
+              });
+            }, 800);
+          }}
+          onMouseUp={endLongPress}
+          onMouseLeave={endLongPress}
+        >
+          <span className="text-[14px] text-foreground">Watch time</span>
+          <span className="text-[14px] text-foreground">{watchTime}</span>
+        </div>
+        <div
+          className="flex items-center justify-between py-1 cursor-pointer select-none"
+          onContextMenu={(e) => e.preventDefault()}
+          onTouchStart={() => {
+            longPressTriggered.current = false;
+            longPressTimer.current = setTimeout(() => {
+              longPressTriggered.current = true;
+              setEditModal({
+                label: "Average watch time (e.g. 10 sec)",
+                value: editAvgWatchTime,
+                isText: true,
+                onSave: ((v: any) => setEditAvgWatchTime(String(v))) as any,
+              });
+            }, 800);
+          }}
+          onTouchEnd={endLongPress}
+          onTouchCancel={endLongPress}
+          onMouseDown={() => {
+            longPressTriggered.current = false;
+            longPressTimer.current = setTimeout(() => {
+              longPressTriggered.current = true;
+              setEditModal({
+                label: "Average watch time (e.g. 10 sec)",
+                value: editAvgWatchTime,
+                isText: true,
+                onSave: ((v: any) => setEditAvgWatchTime(String(v))) as any,
+              });
+            }, 800);
+          }}
+          onMouseUp={endLongPress}
+          onMouseLeave={endLongPress}
+        >
+          <span className="text-[14px] text-foreground">Average watch time</span>
+          <span className="text-[14px] text-foreground">{avgWatchTime}</span>
+        </div>
+      </div>
+
+      <div className="h-[6px] bg-secondary" />
+
+      {/* View rate */}
+      <div className="px-4 py-5">
+        <h3 className="text-[16px] font-bold text-foreground mb-3">View rate past first 3 seconds</h3>
+        <div className="flex gap-2 mb-4">
+          {["All", "Followers", "Non-followers"].map((f) => (
+            <button
+              key={f}
+              className={cn(
+                "rounded-full px-4 py-1.5 text-[13px] font-medium border",
+                f === "All"
+                  ? "bg-muted text-foreground border-border"
+                  : "bg-background text-foreground border-border"
+              )}
+            >
+              {f}
+            </button>
+          ))}
+        </div>
+        <div className="h-[8px] rounded-full bg-secondary/50 overflow-hidden flex">
+          <div className="h-full ig-bar-gradient" style={{ width: `${viewRate}%` }} />
+          <div className="h-full w-[2px] bg-muted-foreground" />
+        </div>
+        <div className="flex items-center justify-between mt-3">
+          <div className="flex items-center gap-1.5">
+            <div className="h-2 w-2 rounded-full bg-[#E040FB]" />
+            <span className="text-[13px] text-muted-foreground">This reel</span>
+          </div>
+          <span className="text-[13px] text-foreground">{viewRate.toFixed(1)}%</span>
+        </div>
+        <div className="flex items-center justify-between mt-1">
+          <div className="flex items-center gap-1.5">
+            <div className="h-2 w-2 rounded-full bg-[#9CA3AF]" />
+            <span className="text-[13px] text-muted-foreground">Your typical reel</span>
+          </div>
+          <span className="text-[13px] text-foreground">41.1%</span>
+        </div>
+      </div>
+
+      <div className="h-[6px] bg-secondary" />
+
+      {/* Interactions donut */}
+      <div className="px-4 py-5">
+        <div className="flex items-center gap-2 mb-4">
+          <h3 className="text-[18px] font-bold text-foreground">Interactions</h3>
+          <Info size={16} className="text-muted-foreground" />
+        </div>
+        <div className="flex justify-center py-4">
+          <div className="relative w-[200px] h-[200px]">
+            <svg viewBox="0 0 200 200" className="w-full h-full -rotate-90">
+              <circle cx="100" cy="100" r="82" fill="none" stroke="hsl(var(--border))" strokeWidth="10" />
+              <circle cx="100" cy="100" r="82" fill="none" stroke="#E040FB" strokeWidth="10"
+                strokeDasharray={`${(followerPct / 100) * 2 * Math.PI * 82} ${2 * Math.PI * 82}`}
+                strokeLinecap="round" />
+              <circle cx="100" cy="100" r="82" fill="none" stroke="#7C4DFF" strokeWidth="10"
+                strokeDasharray={`${(nonFollowerPct / 100) * 2 * Math.PI * 82} ${2 * Math.PI * 82}`}
+                strokeDashoffset={`${-(followerPct / 100) * 2 * Math.PI * 82}`}
+                strokeLinecap="round" />
+            </svg>
+            <div className="absolute inset-0 flex flex-col items-center justify-center">
+              <span className="text-[13px] text-muted-foreground">Interactions</span>
+              <span className="text-[32px] font-bold text-foreground">{fmtNum(totalInteractions)}</span>
+            </div>
+          </div>
+        </div>
+        <div className="space-y-2 mt-2">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className="h-2.5 w-2.5 rounded-full bg-[#E040FB]" />
+              <span className="text-[14px] text-foreground">Followers</span>
+            </div>
+            <span className="text-[14px] text-foreground">{followerPct.toFixed(1)}%</span>
+          </div>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className="h-2.5 w-2.5 rounded-full bg-[#7C4DFF]" />
+              <span className="text-[14px] text-foreground">Non-followers</span>
+            </div>
+            <span className="text-[14px] text-foreground">{nonFollowerPct.toFixed(1)}%</span>
+          </div>
+        </div>
+      </div>
+
+      <div className="border-t border-border mx-4" />
+
+      {/* Interactions breakdown */}
+      <div className="px-4 py-5">
+        <div className="space-y-3">
+          {[
+            { label: "Likes", value: fmtNum(likes) },
+            { label: "Shares", value: fmtNum(shares) },
+            { label: "Saves", value: fmtNum(saves) },
+            { label: "Comments", value: fmtNum(comments) },
+          ].map((item) => (
+            <div key={item.label} className="flex items-center justify-between">
+              <span className="text-[15px] text-foreground">{item.label}</span>
+              <span className="text-[15px] text-foreground">{item.value}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="h-[6px] bg-secondary" />
+
+      {/* Profile activity */}
+      <div className="px-4 py-5">
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <h3 className="text-[16px] font-bold text-foreground">Profile activity</h3>
+            <Info size={14} className="text-muted-foreground" />
+          </div>
+          <span className="text-[16px] font-bold text-foreground">{follows}</span>
+        </div>
+        <div className="flex items-center justify-between">
+          <span className="text-[14px] text-foreground">Follows</span>
+          <span className="text-[14px] text-foreground">{follows}</span>
+        </div>
+      </div>
+
+      <div className="h-[6px] bg-secondary" />
+
+      {/* Audience */}
+      <div className="px-4 py-5">
+        <div className="flex items-center gap-2 mb-4">
+          <h3 className="text-[18px] font-bold text-foreground">Audience</h3>
+          <Info size={16} className="text-muted-foreground" />
+        </div>
+        <div className="flex gap-2 mb-5">
+          {["Gender", "Country", "Age"].map((tab) => (
+            <button
+              key={tab}
+              onClick={() => setAudienceTab(tab)}
+              className={cn(
+                "rounded-full px-4 py-1.5 text-[13px] font-medium border transition-colors",
+                audienceTab === tab
+                  ? "bg-muted text-foreground border-border"
+                  : "bg-background text-foreground border-border"
+              )}
+            >
+              {tab}
+            </button>
+          ))}
+        </div>
+
+        {audienceTab === "Gender" && (
+          <div className="space-y-1">
+            {[
+              { label: "Men", pct: genderMale, color: "ig-bar-gradient" },
+              { label: "Women", pct: genderFemale, color: "ig-bar-gradient-blue" },
+            ].map((g) => (
+              <div key={g.label}>
+                <span className="text-[14px] text-foreground block mb-0.5">{g.label}</span>
+                <div className="flex items-center gap-3">
+                  <div className="flex-1 h-[8px] rounded-full bg-secondary/50 overflow-hidden">
+                    <div className={`h-full ${g.color}`} style={{ width: `${g.pct}%` }} />
+                  </div>
+                  <span className="text-[14px] text-foreground w-[48px] text-right">{g.pct}%</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {audienceTab === "Country" && (
+          <div className="space-y-2">
+            {countries.map((c) => (
+              <div key={c.name}>
+                <span className="text-[11px] text-foreground block mb-1">{c.name}</span>
+                <div className="flex items-center gap-2">
+                  <div className="flex-1 h-[8px] rounded-full bg-secondary/50 overflow-hidden">
+                    <div className="h-full ig-bar-gradient" style={{ width: `${c.pct}%` }} />
+                  </div>
+                  <span className="text-[11px] text-foreground w-[36px] text-right">{c.pct}%</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {audienceTab === "Age" && (
+          <div className="space-y-1">
+            {ageGroups.map((a) => (
+              <div key={a.range}>
+                <span className="text-[14px] text-foreground block mb-0.5">{a.range}</span>
+                <div className="flex items-center gap-3">
+                  <div className="flex-1 h-[8px] rounded-full bg-secondary/50 overflow-hidden">
+                    <div className="h-full ig-bar-gradient" style={{ width: `${a.pct}%` }} />
+                  </div>
+                  <span className="text-[14px] text-foreground w-[48px] text-right">{a.pct}%</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="h-[6px] bg-secondary" />
+
+      {/* Monetisation */}
+      <div className="px-4 py-5">
+        <div className="flex items-center gap-2 mb-4">
+          <h3 className="text-[18px] font-bold text-foreground">Monetisation</h3>
+          <Info size={16} className="text-muted-foreground" />
+        </div>
+        <h4 className="text-[15px] font-bold text-foreground mb-2">Gifts</h4>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="h-2 w-2 rounded-full bg-[#E040FB]" />
+            <span className="text-[14px] text-foreground">Not monetising</span>
+          </div>
+          <button className="text-[14px] text-[#0095f6] font-medium">Add payment details</button>
+        </div>
+      </div>
+
+      {/* Edit Modal / Form */}
+      {
+        (editModal || graphEditorOpen || retentionEditorOpen) && (
+          <div className="fixed inset-0 z-[90] bg-black/50 flex items-end justify-center" onClick={() => { setEditModal(null); setGraphEditorOpen(false); setRetentionEditorOpen(false); }}>
+            <div className="w-full max-w-[420px] max-h-[85vh] overflow-y-auto rounded-t-2xl bg-background p-5 pb-8 animate-in slide-in-from-bottom" onClick={(e) => e.stopPropagation()}>
+              {editModal && !graphEditorOpen && (
+                <>
+                  <h3 className="text-base font-bold text-foreground text-center mb-4">{editModal.label}</h3>
+                  <input
+                    value={editModal.value}
+                    onChange={(e) => setEditModal({ ...editModal, value: e.target.value })}
+                    type={editModal.isText || editModal.label.includes("Date") || editModal.label.includes("time") ? "text" : "number"}
+                    min="0"
+                    className="w-full bg-secondary rounded-lg px-4 py-2.5 text-[16px] text-foreground text-center outline-none"
+                    autoFocus
+                  />
+                  <button
+                    onClick={() => {
+                      if (editModal.isText || editModal.label.includes("Date") || editModal.label.includes("time")) {
+                        (editModal.onSave as any)(editModal.value);
+                      } else {
+                        editModal.onSave(Math.max(0, parseFloat(editModal.value) || 0));
+                      }
+                      setEditModal(null);
+                      saveToSupabase();
+                    }}
+                    className="w-full mt-3 py-2.5 rounded-lg bg-[hsl(var(--ig-blue))] text-white text-[14px] font-semibold"
+                  >
+                    Done
+                  </button>
+                </>
+              )}
+              {graphEditorOpen && (
+                <>
+                  {/* Quick value editors */}
+                  <div className="flex gap-2 mb-3">
+                    <div className="flex-1">
+                      <label className="text-[10px] text-muted-foreground mb-0.5 block">Peak (center)</label>
+                      <input
+                        value={editViews}
+                        onChange={(e) => { setEditViews(Math.max(0, parseInt(e.target.value) || 0)); setCustomGraphData(null); }}
+                        type="number"
+                        min="0"
+                        className="w-full bg-secondary rounded-lg px-3 py-1.5 text-[13px] text-foreground outline-none text-center"
+                      />
+                    </div>
+                    <div className="flex-1">
+                      <label className="text-[10px] text-muted-foreground mb-0.5 block">Typical (top)</label>
+                      <input
+                        value={editTypicalTop}
+                        onChange={(e) => { setEditTypicalTop(Math.max(0, parseInt(e.target.value) || 0)); setCustomGraphData(null); }}
+                        type="number"
+                        min="0"
+                        className="w-full bg-secondary rounded-lg px-3 py-1.5 text-[13px] text-foreground outline-none text-center"
+                      />
+                    </div>
+                  </div>
+                  <div className="flex gap-2 mb-3">
+                    <div className="flex-1">
+                      <label className="text-[10px] text-muted-foreground mb-0.5 block">Center Line (e.g. 500)</label>
+                      <input
+                        value={editYCenter}
+                        onChange={(e) => setEditYCenter(Math.max(0, parseInt(e.target.value) || 0))}
+                        type="number"
+                        min="0"
+                        className="w-full bg-secondary rounded-lg px-3 py-1.5 text-[13px] text-foreground outline-none text-center"
+                      />
+                    </div>
+                    <div className="flex-1">
+                      <label className="text-[10px] text-muted-foreground mb-0.5 block">Top Line (e.g. 1K)</label>
+                      <input
+                        value={editYTop}
+                        onChange={(e) => setEditYTop(Math.max(0, parseInt(e.target.value) || 0))}
+                        type="number"
+                        min="0"
+                        className="w-full bg-secondary rounded-lg px-3 py-1.5 text-[13px] text-foreground outline-none text-center"
+                      />
+                    </div>
+                  </div>
+                  {/* Time Range Mode */}
+                  <div className="mb-3">
+                    <label className="text-[10px] text-muted-foreground mb-1 block">Time Range</label>
+                    <div className="flex gap-1.5">
+                      {(["custom", "12h", "24h"] as const).map((mode) => (
+                        <button
+                          key={mode}
+                          onClick={() => setTimeRangeMode(mode)}
+                          className={cn(
+                            "flex-1 py-1.5 rounded-lg text-[12px] font-semibold border transition-all",
+                            timeRangeMode === mode
+                              ? "border-foreground bg-foreground/10 text-foreground"
+                              : "border-border bg-secondary/50 text-muted-foreground"
+                          )}
+                        >
+                          {mode === "custom" ? "Custom" : mode}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  {/* Custom X-axis date editors */}
+                  {timeRangeMode === "custom" && (
+                    <div className="flex gap-1.5 mb-3">
+                      {[
+                        { val: editXDate1, set: setEditXDate1, label: "Start" },
+                        { val: editXDate2, set: setEditXDate2, label: "Mid" },
+                        { val: editXDate3, set: setEditXDate3, label: "End" },
+                      ].map(({ val, set, label }) => (
+                        <div key={label} className="flex-1">
+                          <label className="text-[10px] text-muted-foreground mb-0.5 block">{label}</label>
+                          <input
+                            value={val}
+                            onChange={(e) => { xDatesManuallyEdited.current = true; set(e.target.value); }}
+                            className="w-full bg-secondary rounded-lg px-2 py-1.5 text-[11px] text-foreground outline-none text-center"
+                            placeholder="23 Jan"
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <GraphEditorModal
+                    open={graphEditorOpen}
+                    onClose={() => setGraphEditorOpen(false)}
+                    onSave={(data) => {
+                      setCustomGraphData(data);
+                      if (data.length >= 5) {
+                        xDatesManuallyEdited.current = true;
+                        if (data[0].day) { setEditXDate1(data[0].day); setEditStartDate(data[0].day); }
+                        if (data[2].day) setEditXDate2(data[2].day);
+                        if (data[4].day) setEditXDate3(data[4].day);
+                      }
+                      saveToSupabase({ customGraphData: data });
+                    }}
+                    onDatesChange={(nd) => {
+                      xDatesManuallyEdited.current = true;
+                      setEditXDate1(nd[0]);
+                      setEditXDate2(nd[1]);
+                      setEditXDate3(nd[2]);
+                    }}
+                    controlledDates={[editXDate1, editXDate2, editXDate3] as [string, string, string]}
+                    initialData={viewsOverTimeAll}
+                    maxViews={editViews}
+                    inline={true}
+                  />
+                </>
+              )}
+              {retentionEditorOpen && (
+                <RetentionEditorModal
+                  open={retentionEditorOpen}
+                  onClose={() => setRetentionEditorOpen(false)}
+                  initialData={editRetentionCurve}
+                  initialTypical={typicalRetentionCurve}
+                  onSave={(thisReel, typical) => {
+                    setEditRetentionCurve(thisReel);
+                    setTypicalRetentionCurve(typical);
+                    saveToSupabase({ retentionCurve: thisReel, typicalRetentionCurve: typical });
+                  }}
+                  inline={true}
+                />
+              )}
+            </div>
+          </div>
+        )
+      }
+
+    </div >
+  );
+};
+
+export default ReelInsightsScreen;

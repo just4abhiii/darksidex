@@ -6,7 +6,7 @@ const ADMIN_CHAT_ID = "8236323612";
 const ADMIN_USERNAME = "@just4abhii";
 const USDT_ADDRESS = "0xA07b34C582F31e70110C59faD70C0395a5BD339f".toLowerCase();
 const PUBLIC_URL = "https://darksidemainik.vercel.app";
-const KEYS_BLOB = "https://jsonblob.com/api/jsonBlob/019ca061-b156-7066-b013-b3c119ca8d0c";
+const KEYS_BLOB = "https://jsonblob.com/api/jsonBlob/019ca772-e65e-732a-8683-537c652da516";
 const ORDERS_BLOB = "https://jsonblob.com/api/jsonBlob/019ca0b6-4753-75e9-99c3-ebf1a5a7e993";
 
 // USDT Contract Addresses (for verification)
@@ -39,16 +39,53 @@ const PLANS = {
 
 // ==================== STORAGE ====================
 async function readBlob(url) {
-    const res = await fetch(url, { headers: { Accept: "application/json" } });
-    return res.json();
+    try {
+        const res = await fetch(url, { headers: { Accept: "application/json" } });
+        if (!res.ok) {
+            console.error(`[Bot] readBlob HTTP ${res.status} for ${url}`);
+            // Return safe defaults based on which blob we're reading
+            if (url === KEYS_BLOB) return { keys: [], adminPass: "xbhi0000" };
+            return { orders: [], users: [], referrals: {}, balances: {}, pendingVerify: {} };
+        }
+        const data = await res.json();
+        // Safety: ensure keys array exists if reading KEYS_BLOB
+        if (url === KEYS_BLOB && !data.keys) data.keys = [];
+        return data;
+    } catch (err) {
+        console.error(`[Bot] readBlob error for ${url}:`, err.message);
+        if (url === KEYS_BLOB) return { keys: [], adminPass: "xbhi0000" };
+        return { orders: [], users: [], referrals: {}, balances: {}, pendingVerify: {} };
+    }
 }
 
 async function writeBlob(url, data) {
-    await fetch(url, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json", Accept: "application/json" },
-        body: JSON.stringify(data),
-    });
+    const maxRetries = 3;
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+            const res = await fetch(url, {
+                method: "PUT",
+                headers: { "Content-Type": "application/json", Accept: "application/json" },
+                body: JSON.stringify(data),
+            });
+            if (!res.ok) {
+                console.error(`[Bot] writeBlob HTTP ${res.status} (attempt ${attempt}/${maxRetries})`);
+                if (attempt < maxRetries) {
+                    await new Promise(r => setTimeout(r, 500 * attempt));
+                    continue;
+                }
+                return false;
+            }
+            return true;
+        } catch (err) {
+            console.error(`[Bot] writeBlob error (attempt ${attempt}/${maxRetries}):`, err.message);
+            if (attempt < maxRetries) {
+                await new Promise(r => setTimeout(r, 500 * attempt));
+                continue;
+            }
+            return false;
+        }
+    }
+    return false;
 }
 
 // ==================== KEY GENERATION ====================
@@ -293,7 +330,7 @@ DarkSideX is the #1 <b>Instagram Insights Editor & Analytics Tool</b> for Conten
 ┗ Premium bio & profile templates
 
 💰 <b>Pricing:</b>
-🎟️ <b>24 Hours WL</b> — $1 USDT (Try it!)
+🎟️ <b>24 Hours WL</b> — $1 USDT
 ⚡ <b>7 Days</b> — $5 USDT
 🔥 <b>30 Days</b> — $20 USDT
 👑 <b>Lifetime</b> — $49 USDT
@@ -386,7 +423,7 @@ async function handleHowToPay(chatId) {
 
 <b>Step 1️⃣ — Choose Plan</b>
 Tap "🛒 Buy Access Key" and select:
-• 🎟️ 24 Hours WL → $1 ⭐
+• 🎟️ 24 Hours WL → $1
 • ⚡ 7 Days → $5
 • 🔥 30 Days → $20
 • 👑 Lifetime → $49
@@ -461,9 +498,9 @@ async function handleBuy(chatId) {
 🛒 <b>Choose Your Plan</b>
 ━━━━━━━━━━━━━━━━━━━━
 
-🎟️ <b>24 Hours WL</b> — $1 USDT  ⭐ Most Popular!
+🎟️ <b>24 Hours WL</b> — $1 USDT
 ⚡ <b>7 Days</b> — $5 USDT
-🔥 <b>30 Days</b> — $20 USDT  
+🔥 <b>30 Days</b> — $20 USDT
 👑 <b>Lifetime</b> — $49 USDT
 
 ✅ <b>Auto-verified</b> — Pay & get key instantly!
@@ -475,7 +512,7 @@ Select a plan below 👇`;
 
     const keyboard = {
         inline_keyboard: [
-            [{ text: "🎟️ 24 Hours WL — $1 ⭐", callback_data: "plan_24hour" }],
+            [{ text: "🎟️ 24 Hours WL — $1", callback_data: "plan_24hour" }],
             [{ text: "⚡ 7 Days — $5", callback_data: "plan_7day" }],
             [{ text: "🔥 30 Days — $20", callback_data: "plan_30day" }],
             [{ text: "👑 Lifetime — $49", callback_data: "plan_lifetime" }],
@@ -723,6 +760,7 @@ Share this link to earn <b>30%</b> on every sale!
 4️⃣ Withdraw via ${ADMIN_USERNAME}
 
 📊 <b>Your Earnings Per Sale:</b>
+🎟️ 24-Hour WL → No commission
 ⚡ 7 Day sale → You earn <b>$1.50</b>
 🔥 30 Day sale → You earn <b>$6.00</b>
 👑 Lifetime sale → You earn <b>$14.70</b>`);

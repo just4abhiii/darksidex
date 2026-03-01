@@ -162,10 +162,10 @@ const ReelDetailScreen = () => {
     return String(n);
   };
   const stats = {
-    likes: ins?.likes || 725,
-    comments: ins?.comments || 10,
-    sends: ins?.shares || 24,
-    saves: ins?.saves || 60,
+    likes: ins?.likes ?? 725,
+    comments: ins?.comments ?? 10,
+    sends: ins?.shares ?? 24,
+    saves: ins?.saves ?? 60,
     views: ins ? fmtK(ins.views) : "7K",
   };
 

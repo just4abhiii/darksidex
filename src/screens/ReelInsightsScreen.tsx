@@ -135,20 +135,20 @@ const ReelInsightsScreen = () => {
   const [audienceTab, setAudienceTab] = useState("Gender");
 
   // Editable state - all values can be long-pressed to edit
-  const [editViews, setEditViews] = useState(ins?.views || 1000);
-  const [editLikes, setEditLikes] = useState(ins?.likes || 69);
-  const [editComments, setEditComments] = useState(ins?.comments || 11);
-  const [editShares, setEditShares] = useState(ins?.shares || 2);
-  const [editSaves, setEditSaves] = useState(ins?.saves || 8);
-  const [editFollowerPct, setEditFollowerPct] = useState(ins?.followerViewsPct || 89);
-  const [editGenderMale, setEditGenderMale] = useState(ins?.genderMale || 92);
-  const [editViewRate, setEditViewRate] = useState(ins?.viewRatePast3Sec || 42);
+  const [editViews, setEditViews] = useState(ins?.views ?? 1000);
+  const [editLikes, setEditLikes] = useState(ins?.likes ?? 69);
+  const [editComments, setEditComments] = useState(ins?.comments ?? 11);
+  const [editShares, setEditShares] = useState(ins?.shares ?? 2);
+  const [editSaves, setEditSaves] = useState(ins?.saves ?? 8);
+  const [editFollowerPct, setEditFollowerPct] = useState(ins?.followerViewsPct ?? 89);
+  const [editGenderMale, setEditGenderMale] = useState(ins?.genderMale ?? 92);
+  const [editViewRate, setEditViewRate] = useState(ins?.viewRatePast3Sec ?? 42);
   const [editStartDate, setEditStartDate] = useState(post?.graphStartDate || ins?.viewsOverTime?.[0]?.day || "23 Jan");
   const [editDisplayDate, setEditDisplayDate] = useState(post?.graphStartDate || "5 February");
   const [editDuration, setEditDuration] = useState(post?.duration || "0:10");
   const [graphEditorOpen, setGraphEditorOpen] = useState(false);
   const [customGraphData, setCustomGraphData] = useState<{ day: string; thisReel: number; typical: number }[] | null>(null);
-  const [editTypicalTop, setEditTypicalTop] = useState(Math.round((ins?.views || 1000) * 0.55));
+  const [editTypicalTop, setEditTypicalTop] = useState(Math.round((ins?.views ?? 1000) * 0.55));
 
   // Watch time editable state
   const [editWatchTime, setEditWatchTime] = useState(ins?.watchTime || "1h 3m 53s");
@@ -334,8 +334,8 @@ const ReelInsightsScreen = () => {
   const sources = ins?.sources || [
     { name: "Feed", pct: 63.4 }, { name: "Reels tab", pct: 11.1 }, { name: "Stories", pct: 10.6 }, { name: "Explore", pct: 7.4 }, { name: "Profile", pct: 6.0 },
   ];
-  const accountsReached = ins?.accountsReached || 567;
-  const follows = ins?.follows || 0;
+  const accountsReached = ins?.accountsReached ?? 567;
+  const follows = ins?.follows ?? 0;
 
   // Generate separate graphs for All, Followers, Non-followers
   // customGraphData = user-drawn graph (Draw ON + save). Otherwise auto-generate from views count.

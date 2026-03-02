@@ -704,16 +704,6 @@ const ReelInsightsScreen = () => {
             onMouseUp={endLongPress}
             onMouseLeave={endLongPress}
           >Views over time</h3>
-          <button
-            onClick={() => {
-              const newVal = !showGraph;
-              setShowGraph(newVal);
-              saveToSupabase({ showGraph: newVal });
-            }}
-            className={`w-[44px] h-[24px] rounded-full transition-colors ${showGraph ? 'bg-[hsl(var(--ig-blue))]' : 'bg-muted'}`}
-          >
-            <div className={`w-[20px] h-[20px] rounded-full bg-white shadow transition-transform mx-[2px] ${showGraph ? 'translate-x-[20px]' : 'translate-x-0'}`} />
-          </button>
         </div>
         {showGraph && (<>
           <div className="flex gap-2 mb-4">

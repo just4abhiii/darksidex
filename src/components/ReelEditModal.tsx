@@ -298,85 +298,49 @@ const ReelEditModal = ({ open, onClose, reel, reelIndex, onSave, onDelete }: Ree
                   alert("Video must be under 50MB");
                   return;
                 }
+
+                // Show blob URL immediately — instant preview
+                const blobUrl = URL.createObjectURL(file);
+                setData((prev) => prev ? { ...prev, videoUrl: blobUrl } : prev);
+
+                // Try Supabase upload in background with timeout
                 setVideoUploading(true);
-                setUploadProgress(0);
+                setUploadProgress(50);
                 try {
                   const ext = file.name.split('.').pop() || 'mp4';
                   const fileName = `reel-${reelIndex}-${Date.now()}.${ext}`;
-                  let finalUrl = "";
 
-                  // Method 1: Try Supabase SDK upload (most reliable)
-                  try {
-                    console.log("[VideoUpload] Attempting Supabase SDK upload...", fileName);
-                    setUploadProgress(10);
-                    const { data: uploadData, error: uploadError } = await supabase.storage
-                      .from('reel-videos')
-                      .upload(fileName, file, {
-                        cacheControl: '3600',
-                        upsert: true,
-                        contentType: file.type,
-                      });
+                  // Race: Supabase upload vs 8-second timeout
+                  const uploadPromise = supabase.storage
+                    .from('reel-videos')
+                    .upload(fileName, file, {
+                      cacheControl: '3600',
+                      upsert: true,
+                      contentType: file.type,
+                    });
 
-                    if (uploadError) {
-                      console.error("[VideoUpload] Supabase SDK error:", uploadError.message, uploadError);
-                      throw uploadError;
-                    }
+                  const timeoutPromise = new Promise((_, reject) =>
+                    setTimeout(() => reject(new Error("Upload timeout")), 8000)
+                  );
 
-                    setUploadProgress(80);
-                    const { data: urlData } = supabase.storage.from('reel-videos').getPublicUrl(fileName);
-                    finalUrl = urlData.publicUrl;
-                    console.log("[VideoUpload] Supabase upload success:", finalUrl);
-                    setUploadProgress(100);
-                  } catch (sdkErr: any) {
-                    console.warn("[VideoUpload] Supabase upload failed, trying XHR...", sdkErr?.message);
+                  const { error: uploadError } = await Promise.race([uploadPromise, timeoutPromise]) as any;
 
-                    // Method 2: Try XHR upload
-                    try {
-                      finalUrl = await new Promise<string>((resolve, reject) => {
-                        const xhr = new XMLHttpRequest();
-                        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-                        const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
-                        const url = `${supabaseUrl}/storage/v1/object/reel-videos/${fileName}`;
-                        xhr.upload.onprogress = (ev) => {
-                          if (ev.lengthComputable) setUploadProgress(Math.round((ev.loaded / ev.total) * 100));
-                        };
-                        xhr.onload = () => {
-                          if (xhr.status >= 200 && xhr.status < 300) {
-                            const { data: urlData } = supabase.storage.from('reel-videos').getPublicUrl(fileName);
-                            resolve(urlData.publicUrl);
-                          } else {
-                            console.error("[VideoUpload] XHR failed:", xhr.status, xhr.responseText);
-                            reject(new Error(`Upload failed: ${xhr.status} - ${xhr.responseText}`));
-                          }
-                        };
-                        xhr.onerror = () => reject(new Error("Network error"));
-                        xhr.open("POST", url);
-                        xhr.setRequestHeader("Authorization", `Bearer ${supabaseKey}`);
-                        xhr.setRequestHeader("apikey", supabaseKey || "");
-                        xhr.setRequestHeader("x-upsert", "true");
-                        xhr.setRequestHeader("Content-Type", file.type);
-                        xhr.setRequestHeader("Cache-Control", "max-age=3600");
-                        xhr.send(file);
-                      });
-                      console.log("[VideoUpload] XHR upload success:", finalUrl);
-                    } catch (xhrErr: any) {
-                      console.warn("[VideoUpload] XHR also failed, using local blob URL fallback.", xhrErr?.message);
-                      // Method 3: Fallback to local blob URL so form still works
-                      finalUrl = URL.createObjectURL(file);
-                      console.log("[VideoUpload] Using local blob URL:", finalUrl);
-                    }
-                  }
+                  if (uploadError) throw uploadError;
 
+                  const { data: urlData } = supabase.storage.from('reel-videos').getPublicUrl(fileName);
+                  const finalUrl = urlData.publicUrl;
+                  console.log("[VideoUpload] Supabase success:", finalUrl);
                   setData((prev) => prev ? { ...prev, videoUrl: finalUrl } : prev);
+                  setUploadProgress(100);
                 } catch (err: any) {
-                  console.error("[VideoUpload] All methods failed:", err);
-                  // Final fallback: always use blob URL so the form works
-                  const blobUrl = URL.createObjectURL(file);
-                  setData((prev) => prev ? { ...prev, videoUrl: blobUrl } : prev);
-                  console.log("[VideoUpload] Emergency fallback to blob URL:", blobUrl);
+                  console.warn("[VideoUpload] Supabase failed, using local blob URL:", err?.message);
+                  // Keep the blob URL that's already set — it works for current session
+                  setUploadProgress(100);
                 } finally {
-                  setVideoUploading(false);
-                  setUploadProgress(0);
+                  setTimeout(() => {
+                    setVideoUploading(false);
+                    setUploadProgress(0);
+                  }, 500);
                   e.target.value = "";
                 }
               }}
@@ -442,21 +406,27 @@ const ReelEditModal = ({ open, onClose, reel, reelIndex, onSave, onDelete }: Ree
                   alert("Image must be under 5MB");
                   return;
                 }
+                // Show base64 preview immediately
+                const reader = new FileReader();
+                reader.onload = (ev) => {
+                  setData((prev) => prev ? { ...prev, thumbnail: ev.target?.result as string } : prev);
+                };
+                reader.readAsDataURL(file);
+
+                // Try Supabase upload in background with 5s timeout
                 try {
                   const ext = file.name.split('.').pop() || 'jpg';
                   const fileName = `thumb-${reelIndex}-${Date.now()}.${ext}`;
-                  const { error } = await supabase.storage.from('reel-videos').upload(fileName, file, { cacheControl: '3600', upsert: true, contentType: file.type });
+                  const uploadPromise = supabase.storage.from('reel-videos').upload(fileName, file, { cacheControl: '3600', upsert: true, contentType: file.type });
+                  const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), 5000));
+                  const { error } = await Promise.race([uploadPromise, timeoutPromise]) as any;
                   if (error) throw error;
                   const { data: urlData } = supabase.storage.from('reel-videos').getPublicUrl(fileName);
                   setData((prev) => prev ? { ...prev, thumbnail: urlData.publicUrl } : prev);
                   console.log('[ThumbUpload] Supabase success:', urlData.publicUrl);
                 } catch (err) {
-                  console.warn('[ThumbUpload] Supabase failed, using base64 fallback', err);
-                  const reader = new FileReader();
-                  reader.onload = (ev) => {
-                    setData((prev) => prev ? { ...prev, thumbnail: ev.target?.result as string } : prev);
-                  };
-                  reader.readAsDataURL(file);
+                  console.warn('[ThumbUpload] Supabase failed, keeping base64:', err);
+                  // base64 preview already set — it persists in localStorage
                 }
                 e.target.value = "";
               }}

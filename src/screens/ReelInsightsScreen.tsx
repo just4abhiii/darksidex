@@ -586,7 +586,9 @@ const ReelInsightsScreen = () => {
         </div>
         {/* Bookmark */}
         <div className="flex flex-col items-center gap-1.5">
-          <Bookmark size={24} className="text-foreground fill-foreground" />
+          <svg width="24" height="24" viewBox="0 0 24 24" className="text-foreground">
+            <path d="M4 2h16v20l-8-5.5L4 22V2z" fill="currentColor" />
+          </svg>
           <span className="text-[13px] font-medium text-foreground">{fmtNum(saves)}</span>
         </div>
       </div>

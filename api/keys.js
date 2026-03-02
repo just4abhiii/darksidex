@@ -171,18 +171,19 @@ module.exports = async function handler(req, res) {
             return json(res, 200, { success: true, deleted: keyToDelete });
         }
 
-        // ===== PATCH: Revoke/reactivate a key (admin only) =====
+        // ===== PATCH: Revoke/reactivate/reset device (admin only) =====
         if (req.method === "PATCH") {
             if (!isAdmin(req)) {
                 return json(res, 401, { error: "Unauthorized" });
             }
-            const { key: targetKey, active } = req.body;
+            const { key: targetKey, active, resetDevice } = req.body;
             const raw = await redis.get(`key:${targetKey}`);
             if (!raw) {
                 return json(res, 404, { error: "Key not found" });
             }
             const keyData = typeof raw === "string" ? JSON.parse(raw) : raw;
-            keyData.active = active;
+            if (typeof active === "boolean") keyData.active = active;
+            if (resetDevice) keyData.deviceFingerprint = null;
             await redis.set(`key:${targetKey}`, JSON.stringify(keyData));
             return json(res, 200, { success: true, key: keyData });
         }

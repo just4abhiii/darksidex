@@ -156,6 +156,10 @@ export async function reactivateKey(key: string): Promise<void> {
     await apiCall("PATCH", { key, active: true });
 }
 
+export async function resetDeviceLock(key: string): Promise<void> {
+    await apiCall("PATCH", { key, resetDevice: true });
+}
+
 // ==================== YOUTUBE URL ====================
 
 // Store YouTube URL in Redis too

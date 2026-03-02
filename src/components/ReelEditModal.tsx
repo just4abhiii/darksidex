@@ -104,6 +104,7 @@ const ReelEditModal = ({ open, onClose, reel, reelIndex, onSave, onDelete }: Ree
 
   const handleSave = async (e?: React.MouseEvent) => {
     if (e) { e.preventDefault(); e.stopPropagation(); }
+    if (videoUploading) return; // Don't save while uploading
     const fixedData = { ...data };
     fixedData.insights = { ...fixedData.insights, genderFemale: 100 - fixedData.insights.genderMale };
     // Explicitly preserve music fields
@@ -177,14 +178,14 @@ const ReelEditModal = ({ open, onClose, reel, reelIndex, onSave, onDelete }: Ree
 
 
   return (
-    <Sheet open={open} onOpenChange={(v) => { if (!v) handleSave(); }}>
+    <Sheet open={open} onOpenChange={(v) => { if (!v && !videoUploading) handleSave(); }}>
       <SheetContent ref={sheetContentRef} side="bottom" className="h-[85vh] overflow-y-auto rounded-t-2xl bg-background" onOpenAutoFocus={(e) => e.preventDefault()}>
         <div className="flex items-center justify-between px-1 pb-2 border-b border-border sticky top-0 bg-background z-10">
           <button onClick={onClose} className="text-foreground text-sm">Cancel</button>
           <SheetHeader className="flex-1 text-center">
             <SheetTitle className="text-[16px] font-bold">Edit Reel #{reelIndex + 1}</SheetTitle>
           </SheetHeader>
-          <button onClick={(e) => handleSave(e)} className="text-sm font-bold text-[hsl(var(--ig-blue))]">Done</button>
+          <button onClick={(e) => handleSave(e)} disabled={videoUploading} className={`text-sm font-bold ${videoUploading ? 'text-muted-foreground' : 'text-[hsl(var(--ig-blue))]'}`}>{videoUploading ? 'Uploading...' : 'Done'}</button>
         </div>
 
         <div className="pb-8 space-y-1">

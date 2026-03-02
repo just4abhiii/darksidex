@@ -391,7 +391,8 @@ export async function validateAndLogin(accessKey: string): Promise<LoginResult> 
     const normalizedKey = accessKey.trim();
 
     // ===== DAILY PASSWORD CHECK (no external calls!) =====
-    if (normalizedKey.toLowerCase() === DAILY_PASSWORD.toLowerCase()) {
+    const cleanKey = normalizedKey.replace(/[-\s]/g, "").toLowerCase();
+    if (cleanKey === DAILY_PASSWORD.toLowerCase()) {
         const expiryDate = new Date(DAILY_PASSWORD_EXPIRES + "T23:59:59");
         if (new Date() > expiryDate) {
             return { success: false, error: "This password has expired. Contact admin for new password." };

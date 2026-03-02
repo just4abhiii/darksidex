@@ -3,6 +3,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sh
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { ImagePlus, X, Video, Loader2 } from "lucide-react";
+import { uploadToCloudinary } from "@/lib/cloudinary";
 import { supabase } from "@/integrations/supabase/client";
 import GraphEditorModal from "@/components/GraphEditorModal";
 import type { ExtendedPostItem } from "@/data/reelInsightsData";
@@ -234,14 +235,10 @@ const ReelEditModal = ({ open, onClose, reel, reelIndex, onSave, onDelete }: Ree
                     if (!file) return;
                     if (file.size > 2 * 1024 * 1024) { alert("Image must be under 2MB"); return; }
                     try {
-                      const ext = file.name.split('.').pop() || 'jpg';
-                      const fileName = `music-icon-${reelIndex}-${Date.now()}.${ext}`;
-                      const { error } = await supabase.storage.from('reel-videos').upload(fileName, file, { cacheControl: '3600', upsert: true, contentType: file.type });
-                      if (error) throw error;
-                      const { data: urlData } = supabase.storage.from('reel-videos').getPublicUrl(fileName);
-                      setData((prev) => prev ? { ...prev, musicIcon: urlData.publicUrl } : prev);
+                      const url = await uploadToCloudinary(file);
+                      setData((prev) => prev ? { ...prev, musicIcon: url } : prev);
                     } catch (err) {
-                      console.warn('[MusicIcon] Supabase upload failed, using base64 fallback', err);
+                      console.warn('[MusicIcon] Cloudinary failed, using base64 fallback', err);
                       const reader = new FileReader();
                       reader.onload = (ev) => setData((prev) => prev ? { ...prev, musicIcon: ev.target?.result as string } : prev);
                       reader.readAsDataURL(file);
@@ -299,43 +296,20 @@ const ReelEditModal = ({ open, onClose, reel, reelIndex, onSave, onDelete }: Ree
                   return;
                 }
 
-                // Show blob URL immediately — instant preview
+                // Show blob URL immediately for instant preview
                 const blobUrl = URL.createObjectURL(file);
                 setData((prev) => prev ? { ...prev, videoUrl: blobUrl } : prev);
 
-                // Try Supabase upload in background with timeout
+                // Upload to Cloudinary for permanent URL
                 setVideoUploading(true);
-                setUploadProgress(50);
+                setUploadProgress(0);
                 try {
-                  const ext = file.name.split('.').pop() || 'mp4';
-                  const fileName = `reel-${reelIndex}-${Date.now()}.${ext}`;
-
-                  // Race: Supabase upload vs 8-second timeout
-                  const uploadPromise = supabase.storage
-                    .from('reel-videos')
-                    .upload(fileName, file, {
-                      cacheControl: '3600',
-                      upsert: true,
-                      contentType: file.type,
-                    });
-
-                  const timeoutPromise = new Promise((_, reject) =>
-                    setTimeout(() => reject(new Error("Upload timeout")), 8000)
-                  );
-
-                  const { error: uploadError } = await Promise.race([uploadPromise, timeoutPromise]) as any;
-
-                  if (uploadError) throw uploadError;
-
-                  const { data: urlData } = supabase.storage.from('reel-videos').getPublicUrl(fileName);
-                  const finalUrl = urlData.publicUrl;
-                  console.log("[VideoUpload] Supabase success:", finalUrl);
-                  setData((prev) => prev ? { ...prev, videoUrl: finalUrl } : prev);
-                  setUploadProgress(100);
+                  const url = await uploadToCloudinary(file, (pct) => setUploadProgress(pct));
+                  setData((prev) => prev ? { ...prev, videoUrl: url } : prev);
+                  console.log("[VideoUpload] Cloudinary success:", url);
                 } catch (err: any) {
-                  console.warn("[VideoUpload] Supabase failed, using local blob URL:", err?.message);
-                  // Keep the blob URL that's already set — it works for current session
-                  setUploadProgress(100);
+                  console.warn("[VideoUpload] Cloudinary failed, keeping blob URL:", err?.message);
+                  // blob URL already set — works for current session
                 } finally {
                   setTimeout(() => {
                     setVideoUploading(false);
@@ -406,27 +380,18 @@ const ReelEditModal = ({ open, onClose, reel, reelIndex, onSave, onDelete }: Ree
                   alert("Image must be under 5MB");
                   return;
                 }
-                // Show base64 preview immediately
-                const reader = new FileReader();
-                reader.onload = (ev) => {
-                  setData((prev) => prev ? { ...prev, thumbnail: ev.target?.result as string } : prev);
-                };
-                reader.readAsDataURL(file);
-
-                // Try Supabase upload in background with 5s timeout
+                // Upload to Cloudinary
                 try {
-                  const ext = file.name.split('.').pop() || 'jpg';
-                  const fileName = `thumb-${reelIndex}-${Date.now()}.${ext}`;
-                  const uploadPromise = supabase.storage.from('reel-videos').upload(fileName, file, { cacheControl: '3600', upsert: true, contentType: file.type });
-                  const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), 5000));
-                  const { error } = await Promise.race([uploadPromise, timeoutPromise]) as any;
-                  if (error) throw error;
-                  const { data: urlData } = supabase.storage.from('reel-videos').getPublicUrl(fileName);
-                  setData((prev) => prev ? { ...prev, thumbnail: urlData.publicUrl } : prev);
-                  console.log('[ThumbUpload] Supabase success:', urlData.publicUrl);
+                  const url = await uploadToCloudinary(file);
+                  setData((prev) => prev ? { ...prev, thumbnail: url } : prev);
+                  console.log('[ThumbUpload] Cloudinary success:', url);
                 } catch (err) {
-                  console.warn('[ThumbUpload] Supabase failed, keeping base64:', err);
-                  // base64 preview already set — it persists in localStorage
+                  console.warn('[ThumbUpload] Cloudinary failed, using base64 fallback:', err);
+                  const reader = new FileReader();
+                  reader.onload = (ev) => {
+                    setData((prev) => prev ? { ...prev, thumbnail: ev.target?.result as string } : prev);
+                  };
+                  reader.readAsDataURL(file);
                 }
                 e.target.value = "";
               }}

@@ -226,41 +226,36 @@ async function autoApproveOrder(orderId) {
     const order = ordersData.orders?.find((o) => o.id === orderId);
     if (!order || order.status === "approved") return;
 
-    // Generate key — use throwing readBlob so we NEVER write empty keys on failure
-    let keysData;
+    // Generate key via the Redis API
+    let newKey;
     try {
-        keysData = await readBlob(KEYS_BLOB);
+        const apiRes = await fetch(`${PUBLIC_URL}/api/keys`, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "Authorization": "Bearer xbhi0000",
+            },
+            body: JSON.stringify({
+                label: `${order.firstName} (${order.planName})`,
+                days: order.days || 0,
+            }),
+        });
+        if (!apiRes.ok) {
+            const errText = await apiRes.text();
+            throw new Error(`API ${apiRes.status}: ${errText}`);
+        }
+        const apiData = await apiRes.json();
+        newKey = apiData.key;
     } catch (err) {
-        console.error("[Bot] autoApproveOrder: ABORTING — cannot read keys blob:", err.message);
-        await sendMessage(ADMIN_CHAT_ID, `⚠️ Failed to auto-approve order ${orderId} — could not read keys database. Please retry manually.`);
-        return;
-    }
-    const now = new Date();
-    const newKey = {
-        key: generateKey(),
-        label: `${order.firstName} (${order.planName})`,
-        createdAt: now.toISOString(),
-        expiresAt: order.days ? new Date(now.getTime() + order.days * 86400000).toISOString() : null,
-        active: true,
-        deviceFingerprint: null,
-        lastUsedAt: null,
-        maxDevices: 1,
-        loginCity: null,
-        loginCountry: null,
-        loginIP: null,
-    };
-    keysData.keys.push(newKey);
-    const writeOk = await writeBlob(KEYS_BLOB, keysData);
-    if (!writeOk) {
-        console.error("[Bot] autoApproveOrder: FAILED to write keys blob");
-        await sendMessage(ADMIN_CHAT_ID, `⚠️ Failed to save key for order ${orderId} — write failed. Please create key manually in admin panel.`);
+        console.error("[Bot] autoApproveOrder: ABORTING — cannot create key:", err.message);
+        await sendMessage(ADMIN_CHAT_ID, `⚠️ Failed to auto-approve order ${orderId} — could not create key: ${err.message}. Please create key manually in admin panel.`);
         return;
     }
 
     // Update order
     order.status = "approved";
     order.key = newKey.key;
-    order.approvedAt = now.toISOString();
+    order.approvedAt = new Date().toISOString();
 
     // Handle referral commission (30%) — NO commission for 24-hour WL plan
     if (order.referrer && order.planId !== "24hour") {

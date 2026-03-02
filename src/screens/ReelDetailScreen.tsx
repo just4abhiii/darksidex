@@ -286,15 +286,16 @@ const ReelDetailScreen = () => {
         </button>
         {/* Send */}
         <button className="flex flex-col items-center gap-0.5">
-          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M22 2L11 13" />
-            <path d="M22 2L15 22L11 13L2 9L22 2Z" />
+          <svg width="26" height="26" viewBox="0 0 24 24">
+            <path d="M21.39 2.97c.46-.46.06-1.24-.56-1.06L2.42 6.86c-.56.16-.6.95-.06 1.18l6.93 2.97 6.18-4.47c.24-.18.5.1.3.32l-4.47 6.18 2.97 6.93c.22.54 1.02.5 1.18-.06l4.94-18.41c.04-.14.02-.28-.04-.4l.04-.13z" fill="none" stroke="white" strokeWidth="1.2" />
           </svg>
           <span className="text-[11px] text-white font-semibold">{stats.sends}</span>
         </button>
         {/* Bookmark */}
         <button onClick={() => setSaved(!saved)} className="flex flex-col items-center gap-0.5">
-          <Bookmark size={28} className={cn("text-white", saved && "fill-white")} />
+          <svg width="28" height="28" viewBox="0 0 24 24">
+            <path d="M4 2h16v20l-8-5.5L4 22V2z" fill={saved ? 'white' : 'none'} stroke="white" strokeWidth="1.5" />
+          </svg>
           <span className="text-[11px] text-white font-semibold">{stats.saves}</span>
         </button>
         {/* 3 dots */}

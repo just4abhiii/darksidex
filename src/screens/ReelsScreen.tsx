@@ -13,6 +13,7 @@ import { cn } from "@/lib/utils";
 import { trackEvent } from "@/lib/analytics";
 import CommentsSheet from "@/components/CommentsSheet";
 import ShareSheet from "@/components/ShareSheet";
+import { loadFeedVideos, currentUser, mockAccounts } from "@/data/mockData";
 
 interface Reel {
   id: string;
@@ -32,78 +33,66 @@ const defaultReels: Reel[] = [
     id: "1",
     user: "money_mentor",
     avatar: "https://i.pravatar.cc/150?img=12",
-    caption:
-      "5 ways to earn ₹50K/month from home 💰🔥 #earnmoney #sidehustle #passiveincome",
+    caption: "5 ways to earn ₹50K/month from home 💰🔥 #earnmoney #sidehustle #passiveincome",
     likes: 45200,
     comments: 1230,
     shares: 890,
-    image:
-      "https://images.unsplash.com/photo-1553729459-abb283e6f5ed?w=600&h=1000&fit=crop&q=80",
+    image: "https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=600&h=1067&fit=crop",
     audio: "Money Mindset · trending",
   },
   {
     id: "2",
     user: "hustle.king",
     avatar: "https://i.pravatar.cc/150?img=14",
-    caption:
-      "Start freelancing today — no degree needed 🚀💻 #freelancing #workfromhome #money",
+    caption: "Start freelancing today — no degree needed 🚀💻 #freelancing #workfromhome #money",
     likes: 32100,
     comments: 876,
     shares: 456,
-    image:
-      "https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=600&h=1000&fit=crop",
+    image: "https://images.unsplash.com/photo-1519389950473-47ba0277781c?w=600&h=1067&fit=crop",
     audio: "Grind Mode · hustle.king",
   },
   {
     id: "3",
     user: "crypto_guru",
     avatar: "https://i.pravatar.cc/150?img=15",
-    caption:
-      "Bitcoin se daily ₹5000 kaise kamaye? 🪙📈 #crypto #bitcoin #trading #invest",
+    caption: "Bitcoin se daily ₹5000 kaise kamaye? 🪙📈 #crypto #bitcoin #trading #invest",
     likes: 28400,
     comments: 654,
     shares: 321,
-    image:
-      "https://images.unsplash.com/photo-1518546305927-5a555bb7020d?w=600&h=1000&fit=crop",
+    image: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=600&h=1067&fit=crop",
     audio: "Crypto Beats · trending",
   },
   {
     id: "4",
     user: "skill.factory",
     avatar: "https://i.pravatar.cc/150?img=16",
-    caption:
-      "3 HIGH income skills for 2026 💡🎯 #skills #career #growth #motivation",
+    caption: "3 HIGH income skills for 2026 💡🎯 #skills #career #growth #motivation",
     likes: 51800,
     comments: 1456,
     shares: 1023,
-    image:
-      "https://images.unsplash.com/photo-1522202176988-66273c2fd55f?w=600&h=1000&fit=crop",
+    image: "https://images.unsplash.com/photo-1522202176988-66273c2fd55f?w=600&h=1067&fit=crop",
     audio: "Level Up · skill.factory",
   },
   {
     id: "5",
     user: "dropship_pro",
     avatar: "https://i.pravatar.cc/150?img=17",
-    caption:
-      "Dropshipping se ₹1 lakh/month 🛒🤑 Step by step guide #dropshipping #ecommerce #business",
+    caption: "Dropshipping se ₹1 lakh/month 🛒🤑 Step by step guide #dropshipping #ecommerce #business",
     likes: 19800,
     comments: 543,
     shares: 267,
-    image:
-      "https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?w=600&h=1000&fit=crop",
+    image: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=600&h=1067&fit=crop",
     audio: "Boss Mode · trending",
   },
   {
     id: "6",
     user: "ai_earner",
     avatar: "https://i.pravatar.cc/150?img=18",
-    caption:
-      "ChatGPT se paise kamao — 7 secret methods 🤖💸 #ai #chatgpt #onlineearning",
+    caption: "ChatGPT se paise kamao — 7 secret methods 🤖💸 #ai #chatgpt #onlineearning",
     likes: 67300,
     comments: 2100,
     shares: 1500,
-    image:
-      "https://images.unsplash.com/photo-1677442136019-21780ecad995?w=600&h=1000&fit=crop",
+    image: "https://images.unsplash.com/photo-1531297484001-80022131f5a1?w=600&h=1067&fit=crop",
     audio: "AI Revolution · ai_earner",
   },
 ];
@@ -486,7 +475,22 @@ const ReelsScreen = () => {
   const [customReels, setCustomReels] = useState<Reel[]>(() =>
     loadCustomReels()
   );
-  const allReels = [...customReels, ...defaultReels];
+
+  // Also load home feed videos and convert to reel format
+  const feedVideoReels: Reel[] = loadFeedVideos().map((v) => ({
+    id: `feed_${v.id}`,
+    user: v.username,
+    avatar: v.avatar,
+    caption: v.caption,
+    likes: v.likes,
+    comments: v.comments,
+    shares: 0,
+    image: "",
+    audio: `Original audio · ${v.username}`,
+    videoUrl: v.videoUrl,
+  }));
+
+  const allReels = [...feedVideoReels, ...customReels, ...defaultReels];
 
   const [activeIndex, setActiveIndex] = useState(0);
   const scrollContainerRef = useRef<HTMLDivElement>(null);

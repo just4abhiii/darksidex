@@ -625,15 +625,15 @@ const ReelInsightsScreen = () => {
           <Info size={16} className="text-muted-foreground" />
         </div>
         <div className="flex justify-center py-4">
-          <div className="relative w-[200px] h-[200px]">
-            <svg viewBox="0 0 200 200" className="w-full h-full -rotate-90">
-              <circle cx="100" cy="100" r="82" fill="none" stroke="hsl(var(--border))" strokeWidth="10" />
-              <circle cx="100" cy="100" r="82" fill="none" stroke="#E040FB" strokeWidth="10"
-                strokeDasharray={`${(followerPct / 100) * 2 * Math.PI * 82} ${2 * Math.PI * 82}`}
+          <div className="relative w-[240px] h-[240px]">
+            <svg viewBox="0 0 240 240" className="w-full h-full -rotate-90">
+              <circle cx="120" cy="120" r="100" fill="none" stroke="hsl(var(--border))" strokeWidth="10" />
+              <circle cx="120" cy="120" r="100" fill="none" stroke="#E040FB" strokeWidth="10"
+                strokeDasharray={`${(followerPct / 100) * 2 * Math.PI * 100} ${2 * Math.PI * 100}`}
                 strokeLinecap="round" />
-              <circle cx="100" cy="100" r="82" fill="none" stroke="#7C4DFF" strokeWidth="10"
-                strokeDasharray={`${(nonFollowerPct / 100) * 2 * Math.PI * 82} ${2 * Math.PI * 82}`}
-                strokeDashoffset={`${-(followerPct / 100) * 2 * Math.PI * 82}`}
+              <circle cx="120" cy="120" r="100" fill="none" stroke="#7C4DFF" strokeWidth="10"
+                strokeDasharray={`${(nonFollowerPct / 100) * 2 * Math.PI * 100} ${2 * Math.PI * 100}`}
+                strokeDashoffset={`${-(followerPct / 100) * 2 * Math.PI * 100}`}
                 strokeLinecap="round" />
             </svg>
             <div

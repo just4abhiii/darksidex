@@ -406,7 +406,9 @@ const ReelInsightsScreen = () => {
     : viewsFilter === "Non-followers" ? viewsOverTimeNonFollowers
       : viewsOverTimeAll;
 
-  const totalInteractions = likes + comments + shares + saves;
+  const computedInteractions = likes + comments + shares + saves;
+  const [editInteractions, setEditInteractions] = useState<number | null>(null);
+  const totalInteractions = editInteractions ?? computedInteractions;
   const fmtNum = (n: number) => n >= 1000 ? n.toLocaleString() : String(n);
 
   // Persist current edits back to localStorage
@@ -1074,18 +1076,27 @@ const ReelInsightsScreen = () => {
           <Info size={16} className="text-muted-foreground" />
         </div>
         <div className="flex justify-center py-4">
-          <div className="relative w-[200px] h-[200px]">
-            <svg viewBox="0 0 200 200" className="w-full h-full -rotate-90">
-              <circle cx="100" cy="100" r="82" fill="none" stroke="hsl(var(--border))" strokeWidth="10" />
-              <circle cx="100" cy="100" r="82" fill="none" stroke="#E040FB" strokeWidth="10"
-                strokeDasharray={`${(followerPct / 100) * 2 * Math.PI * 82} ${2 * Math.PI * 82}`}
+          <div className="relative w-[220px] h-[220px]">
+            <svg viewBox="0 0 220 220" className="w-full h-full -rotate-90">
+              <circle cx="110" cy="110" r="90" fill="none" stroke="hsl(var(--border))" strokeWidth="10" />
+              <circle cx="110" cy="110" r="90" fill="none" stroke="#E040FB" strokeWidth="10"
+                strokeDasharray={`${(followerPct / 100) * 2 * Math.PI * 90} ${2 * Math.PI * 90}`}
                 strokeLinecap="round" />
-              <circle cx="100" cy="100" r="82" fill="none" stroke="#7C4DFF" strokeWidth="10"
-                strokeDasharray={`${(nonFollowerPct / 100) * 2 * Math.PI * 82} ${2 * Math.PI * 82}`}
-                strokeDashoffset={`${-(followerPct / 100) * 2 * Math.PI * 82}`}
+              <circle cx="110" cy="110" r="90" fill="none" stroke="#7C4DFF" strokeWidth="10"
+                strokeDasharray={`${(nonFollowerPct / 100) * 2 * Math.PI * 90} ${2 * Math.PI * 90}`}
+                strokeDashoffset={`${-(followerPct / 100) * 2 * Math.PI * 90}`}
                 strokeLinecap="round" />
             </svg>
-            <div className="absolute inset-0 flex flex-col items-center justify-center">
+            <div
+              className="absolute inset-0 flex flex-col items-center justify-center cursor-pointer select-none"
+              onContextMenu={(e) => e.preventDefault()}
+              onTouchStart={() => startLongPress("Interactions", totalInteractions, (v) => setEditInteractions(v))}
+              onTouchEnd={endLongPress}
+              onTouchCancel={endLongPress}
+              onMouseDown={() => startLongPress("Interactions", totalInteractions, (v) => setEditInteractions(v))}
+              onMouseUp={endLongPress}
+              onMouseLeave={endLongPress}
+            >
               <span className="text-[13px] text-muted-foreground">Interactions</span>
               <span className="text-[32px] font-bold text-foreground">{fmtNum(totalInteractions)}</span>
             </div>

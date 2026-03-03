@@ -160,7 +160,7 @@ const HomeScreen = () => {
       />
 
       {/* Stories */}
-      <div className="border-b border-border">
+      <div>
         <div className="flex gap-2 overflow-x-auto hide-scrollbar px-3 pt-4 pb-3">
           {stories.map((story, i) => {
             const displayStory = story.isOwn

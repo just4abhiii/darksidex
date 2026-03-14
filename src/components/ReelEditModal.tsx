@@ -212,40 +212,44 @@ const ReelEditModal = ({ open, onClose, reel, reelIndex, onSave, onDelete }: Ree
               onChange={async (e) => {
                 const file = e.target.files?.[0];
                 if (!file) return;
+                
                 if (file.size > 50 * 1024 * 1024) {
                   alert("Video must be under 50MB");
                   return;
                 }
+
                 setVideoUploading(true);
-                setUploadProgress(0);
+                setUploadProgress(10); // Start progress
+
                 try {
                   const fileName = `reel-${reelIndex}-${Date.now()}.${file.name.split('.').pop()}`;
-                  const publicUrl = await new Promise<string>((resolve, reject) => {
-                    const xhr = new XMLHttpRequest();
-                    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-                    const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
-                    const url = `${supabaseUrl}/storage/v1/object/reel-videos/${fileName}`;
-                    xhr.upload.onprogress = (ev) => {
-                      if (ev.lengthComputable) setUploadProgress(Math.round((ev.loaded / ev.total) * 100));
-                    };
-                    xhr.onload = () => {
-                      if (xhr.status >= 200 && xhr.status < 300) {
-                        const { data: urlData } = supabase.storage.from('reel-videos').getPublicUrl(fileName);
-                        resolve(urlData.publicUrl);
-                      } else reject(new Error(`Upload failed: ${xhr.status}`));
-                    };
-                    xhr.onerror = () => reject(new Error("Network error"));
-                    xhr.open("POST", url);
-                    xhr.setRequestHeader("Authorization", `Bearer ${supabaseKey}`);
-                    xhr.setRequestHeader("apikey", supabaseKey);
-                    xhr.setRequestHeader("x-upsert", "true");
-                    xhr.setRequestHeader("Content-Type", file.type);
-                    xhr.setRequestHeader("Cache-Control", "max-age=3600");
-                    xhr.send(file);
-                  });
-                  setData((prev) => prev ? { ...prev, videoUrl: publicUrl } : prev);
+                  
+                  // Use Supabase client directly for better reliability
+                  const { data: uploadData, error: uploadError } = await supabase.storage
+                    .from('reel-videos')
+                    .upload(fileName, file, {
+                      cacheControl: '3600',
+                      upsert: true
+                    });
+
+                  if (uploadError) {
+                    console.error("[UploadError]", uploadError);
+                    if (uploadError.message.includes("bucket")) {
+                      throw new Error("Supabase bucket 'reel-videos' not found. Please create it in your Supabase Dashboard -> Storage and set it to 'Public'.");
+                    }
+                    throw uploadError;
+                  }
+
+                  setUploadProgress(90);
+                  const { data: urlData } = supabase.storage.from('reel-videos').getPublicUrl(fileName);
+                  
+                  if (urlData?.publicUrl) {
+                    setData((prev) => prev ? { ...prev, videoUrl: urlData.publicUrl } : prev);
+                    setUploadProgress(100);
+                  }
                 } catch (err: any) {
-                  alert("Upload failed: " + (err.message || "Unknown error"));
+                  console.error("[VideoUpload]", err);
+                  alert("Upload failed: " + (err.message || "Unknown error. Make sure you have a 'reel-videos' PUBLIC bucket in Supabase."));
                 } finally {
                   setVideoUploading(false);
                   setUploadProgress(0);

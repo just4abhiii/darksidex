@@ -30,9 +30,9 @@ const App = () => {
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
+        {showSplash && <SplashScreen onFinish={handleSplashFinish} />}
+        {showSplash && <div className="fixed inset-0 z-[9998] bg-white" />}
         <InstallGate>
-          {showSplash && <SplashScreen onFinish={handleSplashFinish} />}
-          {showSplash && <div className="fixed inset-0 z-[9998] bg-white" />}
           <Toaster />
           <Sonner />
           <BrowserRouter>

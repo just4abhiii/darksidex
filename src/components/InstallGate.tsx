@@ -13,6 +13,7 @@ const InstallGate = ({ children }: { children: React.ReactNode }) => {
     
     // Also allow in development / Lovable preview
     const isPreview = window.location.hostname.includes("lovable") || 
+                      window.location.hostname.includes("vercel.app") ||
                       window.location.hostname === "localhost" ||
                       window.location.hostname === "127.0.0.1";
 

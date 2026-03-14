@@ -9,7 +9,6 @@ import { cn } from "@/lib/utils";
 import { AreaChart, Area, XAxis, YAxis, ResponsiveContainer, CartesianGrid, ReferenceLine, LineChart, Line } from "recharts";
 import GraphEditorModal from "@/components/GraphEditorModal";
 import RetentionEditorModal from "@/components/RetentionEditorModal";
-import { supabase } from "@/integrations/supabase/client";
 
 // Seeded pseudo-random number generator
 const seededRandom = (seed: number) => {
@@ -201,79 +200,6 @@ const ReelInsightsScreen = () => {
   });
   const [timeRangeMode, setTimeRangeMode] = useState<"custom" | "12h" | "24h">("custom");
 
-  // ── Supabase: save all editable state ──────────────────────────────────────
-  const saveToSupabase = useCallback(async (overrides?: Record<string, unknown>) => {
-    const data = {
-      views: editViews, likes: editLikes, comments: editComments,
-      shares: editShares, saves: editSaves,
-      followerViewsPct: editFollowerPct, genderMale: editGenderMale,
-      viewRatePast3Sec: editViewRate,
-      graphStartDate: editStartDate, displayDate: editDisplayDate,
-      duration: editDuration,
-      watchTime: editWatchTime, avgWatchTime: editAvgWatchTime,
-      skipRate: editSkipRate, typicalSkipRate: editTypicalSkipRate,
-      retentionCurve: editRetentionCurve,
-      typicalRetentionCurve,
-      customGraphData,
-      yCenter: editYCenter, yTop: editYTop,
-      editTypicalTop,
-      xDate1: editXDate1, xDate2: editXDate2, xDate3: editXDate3,
-      timeRangeMode,
-      ...overrides,
-    };
-    await (supabase as any).from('reels_data').upsert(
-      { account: accountUsername, post_index: postIndex, data, updated_at: new Date().toISOString() },
-      { onConflict: 'account,post_index' }
-    );
-  }, [
-    editViews, editLikes, editComments, editShares, editSaves,
-    editFollowerPct, editGenderMale, editViewRate,
-    editStartDate, editDisplayDate, editDuration,
-    editWatchTime, editAvgWatchTime,
-    editSkipRate, editTypicalSkipRate, editRetentionCurve, typicalRetentionCurve,
-    customGraphData, editYCenter, editYTop, editTypicalTop,
-    editXDate1, editXDate2, editXDate3, timeRangeMode,
-    accountUsername, postIndex,
-  ]);
-
-  // ── Load from Supabase on mount ────────────────────────────────────────────
-  useEffect(() => {
-    (async () => {
-      const { data: rows } = await (supabase as any)
-        .from('reels_data')
-        .select('data')
-        .eq('account', accountUsername)
-        .eq('post_index', postIndex)
-        .maybeSingle();
-      if (!rows?.data) return;
-      const d = rows.data as Record<string, unknown>;
-      if (d.views != null) setEditViews(d.views as number);
-      if (d.likes != null) setEditLikes(d.likes as number);
-      if (d.comments != null) setEditComments(d.comments as number);
-      if (d.shares != null) setEditShares(d.shares as number);
-      if (d.saves != null) setEditSaves(d.saves as number);
-      if (d.followerViewsPct != null) setEditFollowerPct(d.followerViewsPct as number);
-      if (d.genderMale != null) setEditGenderMale(d.genderMale as number);
-      if (d.viewRatePast3Sec != null) setEditViewRate(d.viewRatePast3Sec as number);
-      if (d.graphStartDate) setEditStartDate(d.graphStartDate as string);
-      if (d.displayDate) setEditDisplayDate(d.displayDate as string);
-      if (d.duration) setEditDuration(d.duration as string);
-      if (d.watchTime) setEditWatchTime(d.watchTime as string);
-      if (d.avgWatchTime) setEditAvgWatchTime(d.avgWatchTime as string);
-      if (d.skipRate != null) setEditSkipRate(d.skipRate as number);
-      if (d.typicalSkipRate != null) setEditTypicalSkipRate(d.typicalSkipRate as number);
-      if (d.retentionCurve) setEditRetentionCurve(d.retentionCurve as { t: string; pct: number }[]);
-      if (d.typicalRetentionCurve) setTypicalRetentionCurve(d.typicalRetentionCurve as { t: string; pct: number }[]);
-      if (d.customGraphData) setCustomGraphData(d.customGraphData as { day: string; thisReel: number; typical: number }[]);
-      if (d.yCenter != null) setEditYCenter(d.yCenter as number);
-      if (d.yTop != null) setEditYTop(d.yTop as number);
-      if (d.editTypicalTop != null) setEditTypicalTop(d.editTypicalTop as number);
-      if (d.xDate1) setEditXDate1(d.xDate1 as string);
-      if (d.xDate2) setEditXDate2(d.xDate2 as string);
-      if (d.xDate3) setEditXDate3(d.xDate3 as string);
-      if (d.timeRangeMode) setTimeRangeMode(d.timeRangeMode as 'custom' | '12h' | '24h');
-    })();
-  }, [accountUsername, postIndex]);
   // If saved viewsOverTime has custom labels at ANY of the 3 positions, mark as manually edited
   const hasCustomLabels = (() => {
     const vot = ins?.viewsOverTime;
@@ -1194,7 +1120,6 @@ const ReelInsightsScreen = () => {
                         editModal.onSave(Math.max(0, parseFloat(editModal.value) || 0));
                       }
                       setEditModal(null);
-                      saveToSupabase();
                     }}
                     className="w-full mt-3 py-2.5 rounded-lg bg-[hsl(var(--ig-blue))] text-white text-[14px] font-semibold"
                   >
@@ -1300,7 +1225,6 @@ const ReelInsightsScreen = () => {
                         if (data[2].day) setEditXDate2(data[2].day);
                         if (data[4].day) setEditXDate3(data[4].day);
                       }
-                      saveToSupabase({ customGraphData: data });
                     }}
                     onDatesChange={(nd) => {
                       xDatesManuallyEdited.current = true;
@@ -1324,7 +1248,6 @@ const ReelInsightsScreen = () => {
                   onSave={(thisReel, typical) => {
                     setEditRetentionCurve(thisReel);
                     setTypicalRetentionCurve(typical);
-                    saveToSupabase({ retentionCurve: thisReel, typicalRetentionCurve: typical });
                   }}
                   inline={true}
                 />

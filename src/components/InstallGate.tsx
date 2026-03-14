@@ -12,12 +12,16 @@ const InstallGate = ({ children }: { children: React.ReactNode }) => {
       (window.navigator as any).standalone === true;
     
     // Also allow in development / Lovable preview
+    const isLocalIP = /^(192\.168\.|10\.|172\.(1[6-9]|2[0-9]|3[0-1])\.)/.test(window.location.hostname);
+    
     const isPreview = window.location.hostname.includes("lovable") || 
                       window.location.hostname.includes("vercel.app") ||
                       window.location.hostname === "localhost" ||
-                      window.location.hostname === "127.0.0.1";
+                      window.location.hostname === "127.0.0.1" ||
+                      isLocalIP;
 
-    setIsInstalled(standalone || isPreview);
+    // Temporarily allow all for debugging
+    setIsInstalled(true);
     setChecking(false);
 
     if (!standalone && !isPreview) {

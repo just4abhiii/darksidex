@@ -10,14 +10,17 @@ const SplashScreen = ({ onFinish }: { onFinish: () => void }) => {
 
   useEffect(() => {
     // Remove HTML splash if exists
-    (window as any).__removeSplash?.();
+    if (typeof (window as any).__removeSplash === 'function') {
+      (window as any).__removeSplash();
+    }
     
     const timer = setTimeout(() => {
       setVisible(false);
-      onFinishRef.current();
-    }, 1500);
+      // Call onFinish immediately to swap components in App.tsx
+      onFinish();
+    }, 1000); // 1s is plenty
     return () => clearTimeout(timer);
-  }, []);
+  }, [onFinish]);
 
   return (
     <AnimatePresence>

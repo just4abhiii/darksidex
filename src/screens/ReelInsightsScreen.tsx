@@ -109,7 +109,7 @@ const ReelInsightsScreen = () => {
   const account = mockAccounts[accountUsername] || mockAccounts["just4abhii"] || Object.values(mockAccounts)[0];
   const postIndex = parseInt(id || "0");
 
-  const isMainAccount = accountUsername === "just4abhii" || account?.profile === currentUser;
+  const isMainAccount = true;
   const reelsData = isMainAccount ? loadReelsData() : null;
   const post = isMainAccount && reelsData ? reelsData[postIndex] : null;
   console.log("[Insights] isMain:", isMainAccount, "postIndex:", postIndex, "graphStartDate:", post?.graphStartDate, "views:", post?.insights?.views, "caption:", post?.caption?.slice(0, 20));
@@ -150,6 +150,7 @@ const ReelInsightsScreen = () => {
   const [graphEditorOpen, setGraphEditorOpen] = useState(false);
   const [customGraphData, setCustomGraphData] = useState<{ day: string; thisReel: number; typical: number }[] | null>(null);
   const [editTypicalTop, setEditTypicalTop] = useState(Math.round((ins?.views || 1000) * 0.55));
+  const [editTypicalViewRate, setEditTypicalViewRate] = useState(ins?.typicalViewRate ?? 41.1);
 
   // Watch time editable state
   const [editWatchTime, setEditWatchTime] = useState(ins?.watchTime || "1h 3m 53s");
@@ -254,17 +255,38 @@ const ReelInsightsScreen = () => {
   const genderFemale = 100 - genderMale;
   const watchTime = editWatchTime;
   const avgWatchTime = editAvgWatchTime;
-  const countries = ins?.countries || [
+  const [editCountries, setEditCountries] = useState(ins?.countries || [
     { name: "India", pct: 54.1 }, { name: "Iran", pct: 19.9 }, { name: "Uzbekistan", pct: 5.7 }, { name: "Türkiye", pct: 2.6 }, { name: "Kazakhstan", pct: 1.6 },
-  ];
-  const ageGroups = ins?.ageGroups || [
+  ]);
+  const [editAgeGroups, setEditAgeGroups] = useState(ins?.ageGroups || [
     { range: "13-17", pct: 32.3 }, { range: "18-24", pct: 35.9 }, { range: "25-34", pct: 20.2 }, { range: "35-44", pct: 7.1 }, { range: "45-54", pct: 2.3 }, { range: "55-64", pct: 0.8 }, { range: "65+", pct: 1.4 },
-  ];
-  const sources = ins?.sources || [
+  ]);
+  const [editSources, setEditSources] = useState(ins?.sources || [
     { name: "Feed", pct: 63.4 }, { name: "Reels tab", pct: 11.1 }, { name: "Stories", pct: 10.6 }, { name: "Explore", pct: 7.4 }, { name: "Profile", pct: 6.0 },
-  ];
-  const accountsReached = ins?.accountsReached || 567;
+  ]);
+  const [editAccountsReached, setEditAccountsReached] = useState(ins?.accountsReached || 567);
+  const countries = editCountries;
+  const ageGroups = editAgeGroups;
+  const sources = editSources;
+  const accountsReached = editAccountsReached;
   const follows = editFollows;
+
+  const [editOverviewLabel, setEditOverviewLabel] = useState("Overview");
+  const [editViewsLabel, setEditViewsLabel] = useState("Views");
+  const [editInteractionsLabel, setEditInteractionsLabel] = useState("Interactions");
+  const [editRetentionLabel, setEditRetentionLabel] = useState("Retention");
+  const [editAudienceLabel, setEditAudienceLabel] = useState("Audience");
+  const [editSourcesLabel, setEditSourcesLabel] = useState("Top sources of views");
+  const [editWatchTimeLabel, setEditWatchTimeLabel] = useState("Watch time");
+  const [editProfileActivityLabel, setEditProfileActivityLabel] = useState("Profile activity");
+  const [editThisReelLabel, setEditThisReelLabel] = useState("This reel");
+  const [editTypicalReelLabel, setEditTypicalReelLabel] = useState("Your typical reel views");
+  const [editTypicalReelShortLabel, setEditTypicalReelShortLabel] = useState("Your typical reel");
+  const [editMonetisationLabel, setEditMonetisationLabel] = useState("Monetisation");
+  const [editGiftsLabel, setEditGiftsLabel] = useState("Gifts");
+  const [editAdLabel, setEditAdLabel] = useState("Ad");
+  const [editBoostLabel, setEditBoostLabel] = useState("Boost this Reel");
+  const [editNotMonetisingLabel, setEditNotMonetisingLabel] = useState("Not monetising");
 
   // Generate separate graphs for All, Followers, Non-followers
   // customGraphData = user-drawn graph (Draw ON + save). Otherwise auto-generate from views count.
@@ -336,6 +358,11 @@ const ReelInsightsScreen = () => {
       watchTime: editWatchTime,
       avgWatchTime: editAvgWatchTime,
       follows: editFollows,
+      countries: editCountries,
+      ageGroups: editAgeGroups,
+      sources: editSources,
+      accountsReached: editAccountsReached,
+      typicalViewRate: editTypicalViewRate,
     };
     reel.graphStartDate = editStartDate;
     reel.duration = editDuration;
@@ -356,43 +383,30 @@ const ReelInsightsScreen = () => {
     freshData[postIndex] = reel;
     saveReelsData(freshData);
     console.log("[InsightsPersist] Saved edits for reel", postIndex);
-  }, [isMainAccount, postIndex, editViews, editLikes, editComments, editShares, editSaves, editFollowerPct, editGenderMale, editViewRate, editStartDate, editDuration, editXDate1, editXDate2, editXDate3, customGraphData, editYCenter, editYTop, editSkipRate, editTypicalSkipRate, editRetentionCurve, editWatchTime, editAvgWatchTime, editFollows]);
+  }, [isMainAccount, postIndex, editViews, editLikes, editComments, editShares, editSaves, editFollowerPct, editGenderMale, editViewRate, editStartDate, editDuration, editXDate1, editXDate2, editXDate3, customGraphData, editYCenter, editYTop, editSkipRate, editTypicalSkipRate, editRetentionCurve, editWatchTime, editAvgWatchTime, editFollows, editCountries, editAgeGroups, editSources, editAccountsReached, editTypicalViewRate]);
 
   // ── Inline Edit Mode ──
   const [inlineEditMode, setInlineEditMode] = useState(false);
   const [saveToast, setSaveToast] = useState<"in" | "out" | null>(null);
-  const pagePressTmr = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const headerPressTmr = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Long press anywhere on page body → enter edit mode
-  const startPagePress = useCallback(() => {
-    pagePressTmr.current = setTimeout(() => {
-      if (!inlineEditMode) {
-        setInlineEditMode(true);
-        if (navigator.vibrate) navigator.vibrate(50);
-      }
-    }, 2000);
-  }, [inlineEditMode]);
-  const endPagePress = useCallback(() => {
-    if (pagePressTmr.current) clearTimeout(pagePressTmr.current);
-  }, []);
-
-  // Long press header 2s → save & exit edit mode
-  const startHeaderPress = useCallback(() => {
-    headerPressTmr.current = setTimeout(() => {
-      if (inlineEditMode) {
+  const toggleEditMode = useCallback(() => {
+    console.log("[Insights] Toggling edit mode from", inlineEditMode);
+    if (inlineEditMode) {
+      try {
         persistEdits();
-        setInlineEditMode(false);
-        if (navigator.vibrate) navigator.vibrate([30, 50, 30]);
-        setSaveToast("in");
-        setTimeout(() => setSaveToast("out"), 1500);
-        setTimeout(() => setSaveToast(null), 1900);
+      } catch (err) {
+        console.error("Failed to persist edits:", err);
       }
-    }, 2000);
+      setInlineEditMode(false);
+      if (navigator.vibrate) navigator.vibrate([30, 50, 30]);
+      setSaveToast("in");
+      setTimeout(() => setSaveToast("out"), 1500);
+      setTimeout(() => setSaveToast(null), 1900);
+    } else {
+      setInlineEditMode(true);
+      if (navigator.vibrate) navigator.vibrate(50);
+    }
   }, [inlineEditMode, persistEdits]);
-  const endHeaderPress = useCallback(() => {
-    if (headerPressTmr.current) clearTimeout(headerPressTmr.current);
-  }, []);
 
   // Dynamic color for percentage bars – hsl hue from red(0) → green(130)
   const pctColor = (pct: number) => {
@@ -401,17 +415,18 @@ const ReelInsightsScreen = () => {
   };
 
   // Inline editable field helper
-  const EditableVal = ({ value, onChange, className = "", type = "text" }: {
-    value: string | number; onChange: (v: string) => void; className?: string; type?: string;
+  const EditableVal = ({ value, displayValue, onChange, className = "", type = "text" }: {
+    value: string | number; displayValue?: string | number; onChange: (v: string) => void; className?: string; type?: string;
   }) => {
-    if (!inlineEditMode) return <span className={className}>{value}</span>;
+    if (!inlineEditMode) return <span className={className}>{displayValue ?? value}</span>;
     return (
       <input
-        className={`edit-field-active ${className}`}
+        className={`edit-field-active ${className} outline-none border-none bg-transparent`}
         value={value}
         onChange={(e) => onChange(e.target.value)}
+        onPointerDown={(e) => e.stopPropagation()} // Prevent page-exit long press
         type={type}
-        style={{ font: 'inherit', color: 'inherit', width: String(value).length * 10 + 30 + 'px', maxWidth: '150px' }}
+        style={{ font: 'inherit', color: 'inherit', width: (String(value).length || 1) * 9 + 25 + 'px', maxWidth: '200px' }}
       />
     );
   };
@@ -456,9 +471,6 @@ const ReelInsightsScreen = () => {
   return (
     <div
       className="pb-20 min-h-screen bg-background"
-      onPointerDown={!inlineEditMode ? startPagePress : undefined}
-      onPointerUp={endPagePress}
-      onPointerLeave={endPagePress}
     >
       {/* Save Toast */}
       {saveToast && (
@@ -470,32 +482,55 @@ const ReelInsightsScreen = () => {
       {/* Header — long press 2s to save */}
       <header
         className="sticky top-0 z-40 flex items-center justify-between px-4 py-3.5 bg-background select-none"
-        onPointerDown={(e) => { e.stopPropagation(); startHeaderPress(); }}
-        onPointerUp={endHeaderPress}
-        onPointerLeave={endHeaderPress}
       >
         <div className="flex items-center gap-5">
           <button onClick={() => navigate('/profile')} className="text-foreground">
             <ArrowLeft size={22} strokeWidth={1.8} />
           </button>
-          <h1 className="text-[17px] font-semibold text-foreground">Reel insights</h1>
+          <h1 
+            onClick={() => {
+              console.log("[Insights] Header title clicked");
+              toggleEditMode();
+            }}
+            className="text-[17px] font-semibold text-foreground cursor-pointer select-none active:opacity-60"
+          >
+            Reel insights
+          </h1>
         </div>
-        <button className="text-foreground">
-          <MoreVertical size={20} />
+        <button 
+          type="button"
+          onClick={(e) => { 
+            e.preventDefault();
+            e.stopPropagation(); 
+            console.log("[Insights] Click triggered");
+            toggleEditMode(); 
+          }}
+          className={cn(
+            "text-foreground p-3 -m-3 transition-all active:scale-90 hover:bg-foreground/5 rounded-full cursor-pointer relative z-50 border border-transparent",
+            inlineEditMode ? "text-[#1DB954] border-[#1DB954]/30" : "border-red-500/20"
+          )}
+          aria-label="Toggle edit mode"
+        >
+          {inlineEditMode ? <Pencil size={24} className="pointer-events-none" /> : <MoreVertical size={24} className="pointer-events-none" />}
         </button>
       </header>
 
       {/* Edit Mode Banner */}
       {inlineEditMode && (
         <div className="edit-mode-banner text-white text-center py-1.5 text-[12px] font-semibold tracking-wide">
-          ✏️ EDIT MODE — Long press header to save
+          ✏️ EDIT MODE — Tap 3-dot to save
         </div>
       )}
 
       {/* Reel Preview */}
       <div className="flex flex-col items-center py-6 px-4">
-        <div className="w-[110px] rounded-xl overflow-hidden shadow-md relative">
-          <img src={postImage} alt="Reel thumbnail" className="w-full aspect-[9/16] object-cover" />
+        <div 
+          className="w-[110px] rounded-xl overflow-hidden shadow-md relative cursor-pointer active:scale-[0.98] transition-transform"
+        >
+          <img src={postImage} alt="Reel thumbnail" className="w-full aspect-[9/16] object-cover pointer-events-none" />
+          {!inlineEditMode && (
+             <div className="absolute inset-0 bg-black/5 opacity-0 active:opacity-100 transition-opacity" />
+          )}
         </div>
         <p className="mt-4 text-[14px] text-foreground text-center leading-[20px] whitespace-pre-wrap break-words w-full px-2">{post?.caption || "❤️🤍..."}</p>
         <p
@@ -539,14 +574,14 @@ const ReelInsightsScreen = () => {
           <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" className="text-foreground">
             <path d="M16.792 3.904c1.035 0 2.107.39 3.037 1.178 1.956 1.666 2.055 4.545.163 6.32l-7.992 7.51a1 1 0 0 1-1.372 0l-7.992-7.51c-1.89-1.775-1.792-4.654.162-6.32.93-.787 2.002-1.178 3.037-1.178 1.488 0 2.871.782 3.864 1.947 1-1.165 2.378-1.947 3.864-1.947z" />
           </svg>
-          <EditableVal value={fmtNum(likes)} onChange={(v) => setEditLikes(parseInt(v) || 0)} className="text-[14px] text-foreground" />
+          <EditableVal value={likes} displayValue={fmtNum(likes)} onChange={(v) => setEditLikes(parseInt(v) || 0)} className="text-[14px] text-foreground" />
         </div>
         {/* Comment */}
         <div className="flex flex-col items-center gap-2">
           <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" className="text-foreground">
             <path d="M12.003 2.001a9.97 9.97 0 0 0-9.97 9.97c0 2.478.9 4.747 2.387 6.519l-1.358 3.498a1 1 0 0 0 1.293 1.291l3.5-.136c1.696.8 3.58 1.258 5.56 1.258a9.97 9.97 0 1 0 0-19.94z" />
           </svg>
-          <EditableVal value={fmtNum(comments)} onChange={(v) => setEditComments(parseInt(v) || 0)} className="text-[14px] text-foreground" />
+          <EditableVal value={comments} displayValue={fmtNum(comments)} onChange={(v) => setEditComments(parseInt(v) || 0)} className="text-[14px] text-foreground" />
         </div>
         {/* Send */}
         <div className="flex flex-col items-center gap-2">
@@ -554,21 +589,21 @@ const ReelInsightsScreen = () => {
             <line x1="22" y1="2" x2="11" y2="13" />
             <polygon points="22 2 15 22 11 13 2 9 22 2" />
           </svg>
-          <EditableVal value={fmtNum(shares)} onChange={(v) => setEditShares(parseInt(v) || 0)} className="text-[14px] text-foreground" />
+          <EditableVal value={shares} displayValue={fmtNum(shares)} onChange={(v) => setEditShares(parseInt(v) || 0)} className="text-[14px] text-foreground" />
         </div>
         {/* Repost */}
         <div className="flex flex-col items-center gap-2">
           <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" className="text-foreground">
             <path d="M19.5 7.5v-4l4 4-4 4v-4H5.5c-1.1 0-2 .9-2 2v2h-2v-2C1.5 7.3 3.3 5.5 5.5 5.5h14zM4.5 16.5v4l-4-4 4-4v4h14c1.1 0 2-.9 2-2v-2h2v2c0 2.2-1.8 4-4 4H4.5z" />
           </svg>
-          <EditableVal value={fmtNum(ins?.reposts || 0)} onChange={() => {}} className="text-[14px] text-foreground" />
+          <EditableVal value={ins?.reposts || 0} displayValue={fmtNum(ins?.reposts || 0)} onChange={() => {}} className="text-[14px] text-foreground" />
         </div>
         {/* Bookmark */}
         <div className="flex flex-col items-center gap-2">
           <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" className="text-foreground">
             <path d="M20 22a.999.999 0 0 1-.593-.195L12 17.357l-7.407 4.448A1 1 0 0 1 3 21V3a1 1 0 0 1 1-1h16a1 1 0 0 1 1 1v18a1 1 0 0 1-1 1z" />
           </svg>
-          <EditableVal value={fmtNum(saves)} onChange={(v) => setEditSaves(parseInt(v) || 0)} className="text-[14px] text-foreground" />
+          <EditableVal value={saves} displayValue={fmtNum(saves)} onChange={(v) => setEditSaves(parseInt(v) || 0)} className="text-[14px] text-foreground" />
         </div>
       </div>
 
@@ -577,13 +612,13 @@ const ReelInsightsScreen = () => {
       {/* Overview */}
       <div className="px-4 py-5">
         <div className="flex items-center gap-2 mb-5">
-          <h2 className="text-[18px] font-bold text-foreground">Overview</h2>
+          <EditableVal value={editOverviewLabel} onChange={setEditOverviewLabel} className="text-[18px] font-bold text-foreground" />
           <Info size={16} className="text-muted-foreground" />
         </div>
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <span className="text-[15px] text-foreground">Views</span>
-            <EditableVal value={fmtNum(views)} onChange={(v) => setEditViews(parseInt(v) || 0)} className="text-[15px] text-foreground" />
+            <EditableVal value={views} displayValue={fmtNum(views)} onChange={(v) => setEditViews(parseInt(v) || 0)} className="text-[15px] text-foreground" />
           </div>
           <div className="flex items-center justify-between">
             <span className="text-[15px] text-foreground">Watch time</span>
@@ -591,11 +626,11 @@ const ReelInsightsScreen = () => {
           </div>
           <div className="flex items-center justify-between">
             <span className="text-[15px] text-foreground">Interactions</span>
-            <EditableVal value={fmtNum(totalInteractions)} onChange={() => {}} className="text-[15px] text-foreground" />
+            <EditableVal value={totalInteractions} displayValue={fmtNum(totalInteractions)} onChange={() => {}} className="text-[15px] text-foreground" />
           </div>
           <div className="flex items-center justify-between">
             <span className="text-[15px] text-foreground">Profile activity</span>
-            <EditableVal value={fmtNum(follows)} onChange={(v) => setEditFollows(parseInt(v) || 0)} className="text-[15px] text-foreground" />
+            <EditableVal value={follows} displayValue={fmtNum(follows)} onChange={(v) => setEditFollows(parseInt(v) || 0)} className="text-[15px] text-foreground" />
           </div>
         </div>
       </div>
@@ -605,7 +640,7 @@ const ReelInsightsScreen = () => {
       {/* Views Donut */}
       <div className="px-4 py-5">
         <div className="flex items-center gap-2 mb-4">
-          <h2 className="text-[18px] font-bold text-foreground">Views</h2>
+          <EditableVal value={editViewsLabel} onChange={setEditViewsLabel} className="text-[18px] font-bold text-foreground" />
           <Info size={16} className="text-muted-foreground" />
         </div>
         <div className="flex justify-center py-4">
@@ -622,29 +657,15 @@ const ReelInsightsScreen = () => {
             </svg>
             <div
               className="absolute inset-0 flex flex-col items-center justify-center cursor-pointer select-none"
-              onContextMenu={(e) => e.preventDefault()}
-              onTouchStart={() => startLongPress("Views", views, setEditViews)}
-              onTouchEnd={endLongPress}
-              onTouchCancel={endLongPress}
-              onMouseDown={() => startLongPress("Views", views, setEditViews)}
-              onMouseUp={endLongPress}
-              onMouseLeave={endLongPress}
             >
               <span className="text-[13px] text-muted-foreground">Views</span>
-              <EditableVal value={fmtNum(views)} onChange={(v) => setEditViews(parseInt(v) || 0)} className="text-[32px] font-bold text-foreground" />
+              <EditableVal value={views} displayValue={fmtNum(views)} onChange={(v) => setEditViews(parseInt(v) || 0)} className="text-[32px] font-bold text-foreground" />
             </div>
           </div>
         </div>
         <div className="space-y-2 mt-2">
           <div
             className="flex items-center justify-between cursor-pointer select-none"
-            onContextMenu={(e) => e.preventDefault()}
-            onTouchStart={() => startLongPress("Followers %", followerPct, (v) => setEditFollowerPct(Math.min(100, v)))}
-            onTouchEnd={endLongPress}
-            onTouchCancel={endLongPress}
-            onMouseDown={() => startLongPress("Followers %", followerPct, (v) => setEditFollowerPct(Math.min(100, v)))}
-            onMouseUp={endLongPress}
-            onMouseLeave={endLongPress}
           >
             <div className="flex items-center gap-2">
               <div className="h-2.5 w-2.5 rounded-full bg-[#E040FB]" />
@@ -669,25 +690,7 @@ const ReelInsightsScreen = () => {
         <div className="flex items-center justify-between mb-3">
           <h3
             className="text-[16px] font-bold text-foreground cursor-pointer select-none"
-            onContextMenu={(e) => e.preventDefault()}
-            onTouchStart={() => {
-              longPressTriggered.current = false;
-              longPressTimer.current = setTimeout(() => {
-                longPressTriggered.current = true;
-                setGraphEditorOpen(true);
-              }, 2300);
-            }}
-            onTouchEnd={endLongPress}
-            onTouchCancel={endLongPress}
-            onMouseDown={() => {
-              longPressTriggered.current = false;
-              longPressTimer.current = setTimeout(() => {
-                longPressTriggered.current = true;
-                setGraphEditorOpen(true);
-              }, 2300);
-            }}
-            onMouseUp={endLongPress}
-            onMouseLeave={endLongPress}
+            onClick={() => { if (inlineEditMode) setGraphEditorOpen(true); }}
           >Views over time</h3>
         </div>
         <div className="flex gap-2 mb-4">
@@ -750,11 +753,11 @@ const ReelInsightsScreen = () => {
         <div className="flex items-center justify-center gap-6 mt-2">
           <div className="flex items-center gap-1.5">
             <div className="h-2 w-2 rounded-full bg-[#E040FB]" />
-            <span className="text-[12px] text-muted-foreground">This reel</span>
+            <EditableVal value={editThisReelLabel} onChange={setEditThisReelLabel} className="text-[12px] text-muted-foreground" />
           </div>
           <div className="flex items-center gap-1.5">
             <div className="h-2 w-2 rounded-full bg-[#9CA3AF]" />
-            <span className="text-[12px] text-muted-foreground">Your typical reel views</span>
+            <EditableVal value={editTypicalReelLabel} onChange={setEditTypicalReelLabel} className="text-[12px] text-muted-foreground" />
           </div>
         </div>
 
@@ -764,23 +767,35 @@ const ReelInsightsScreen = () => {
 
       {/* Top sources */}
       <div className="px-4 py-5">
-        <h3 className="text-[16px] font-bold text-foreground mb-4">Top sources of views</h3>
+        <EditableVal value={editSourcesLabel} onChange={setEditSourcesLabel} className="text-[16px] font-bold text-foreground mb-4 inline-block" />
         <div className="space-y-2">
           {sources.map((item) => (
             <div key={item.name}>
-              <span className="text-[11px] text-foreground block mb-1">{item.name}</span>
+              <EditableVal 
+                value={item.name} 
+                onChange={(v) => {
+                  const next = [...editSources];
+                  const idx = next.findIndex(x => x.name === item.name);
+                  if (idx >= 0) { next[idx].name = v; setEditSources(next); }
+                }} 
+                className="text-[11px] text-foreground block mb-1" 
+              />
               <div className="flex items-center gap-2">
                 <div className="flex-1 h-[8px] rounded-full bg-secondary/50 overflow-hidden">
                   <div className="h-full pct-bar-dynamic" style={{ width: `${item.pct}%`, background: pctColor(item.pct) }} />
                 </div>
-                <EditableVal value={item.pct + "%"} onChange={() => {}} className="text-[11px] text-foreground w-[36px] text-right" />
+                <EditableVal value={item.pct} displayValue={item.pct + "%"} onChange={(v) => {
+                  const next = [...editSources];
+                  const idx = next.findIndex(x => x.name === item.name);
+                  if (idx >= 0) { next[idx].pct = Math.min(100, parseFloat(v) || 0); setEditSources(next); }
+                }} className="text-[11px] text-foreground w-[36px] text-right" />
               </div>
             </div>
           ))}
         </div>
         <div className="border-t border-border mt-5 pt-4 flex items-center justify-between">
           <span className="text-[14px] text-foreground">Accounts reached</span>
-          <EditableVal value={fmtNum(accountsReached)} onChange={() => {}} className="text-[14px] text-foreground" />
+          <EditableVal value={editAccountsReached} displayValue={fmtNum(editAccountsReached)} onChange={(v) => setEditAccountsReached(parseInt(v) || 0)} className="text-[14px] text-foreground" />
         </div>
       </div>
 
@@ -790,14 +805,14 @@ const ReelInsightsScreen = () => {
       <div className="px-4 py-5">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <h3 className="text-[16px] font-bold text-foreground">Watch time</h3>
+            <EditableVal value={editWatchTimeLabel} onChange={setEditWatchTimeLabel} className="text-[16px] font-bold text-foreground" />
             <Info size={14} className="text-muted-foreground" />
           </div>
-          <span className="text-[16px] font-bold text-foreground">{watchTime}</span>
+          <EditableVal value={watchTime} onChange={(v) => setEditWatchTime(v)} className="text-[16px] font-bold text-foreground" />
         </div>
         <div className="flex items-center justify-between mt-3">
           <span className="text-[14px] text-foreground">Average watch time</span>
-          <span className="text-[14px] text-foreground">{avgWatchTime}</span>
+          <EditableVal value={avgWatchTime} onChange={(v) => setEditAvgWatchTime(v)} className="text-[14px] text-foreground" />
         </div>
       </div>
 
@@ -807,7 +822,7 @@ const ReelInsightsScreen = () => {
       <div className="px-4 py-5">
         {/* Header */}
         <div className="flex items-center gap-2 mb-5">
-          <h3 className="text-[16px] font-bold text-foreground">Retention</h3>
+          <EditableVal value={editRetentionLabel} onChange={setEditRetentionLabel} className="text-[16px] font-bold text-foreground" />
           <Info size={14} className="text-muted-foreground" />
         </div>
 
@@ -833,25 +848,7 @@ const ReelInsightsScreen = () => {
         {/* Retention line chart — long-press 2s to edit */}
         <div
           className="relative h-[150px] select-none"
-          onContextMenu={(e) => e.preventDefault()}
-          onTouchStart={() => {
-            longPressTriggered.current = false;
-            longPressTimer.current = setTimeout(() => {
-              longPressTriggered.current = true;
-              setRetentionEditorOpen(true);
-            }, 2000);
-          }}
-          onTouchEnd={endLongPress}
-          onTouchCancel={endLongPress}
-          onMouseDown={() => {
-            longPressTriggered.current = false;
-            longPressTimer.current = setTimeout(() => {
-              longPressTriggered.current = true;
-              setRetentionEditorOpen(true);
-            }, 2000);
-          }}
-          onMouseUp={endLongPress}
-          onMouseLeave={endLongPress}
+          onClick={() => { if (inlineEditMode) setRetentionEditorOpen(true); }}
         >
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={editRetentionCurve} margin={{ top: 5, right: 10, left: -5, bottom: 0 }}>
@@ -918,16 +915,16 @@ const ReelInsightsScreen = () => {
         <div className="flex items-center justify-between mt-3">
           <div className="flex items-center gap-1.5">
             <div className="h-2 w-2 rounded-full" style={{ background: pctColor(viewRate) }} />
-            <span className="text-[13px] text-muted-foreground">This reel</span>
+            <EditableVal value={editThisReelLabel} onChange={setEditThisReelLabel} className="text-[13px] text-muted-foreground" />
           </div>
           <EditableVal value={viewRate.toFixed(1) + "%"} onChange={(v) => setEditViewRate(Math.min(100, parseFloat(v) || 0))} className="text-[13px] text-foreground" />
         </div>
         <div className="flex items-center justify-between mt-1">
           <div className="flex items-center gap-1.5">
             <div className="h-2 w-2 rounded-full bg-[#9CA3AF]" />
-            <span className="text-[13px] text-muted-foreground">Your typical reel</span>
+            <EditableVal value={editTypicalReelShortLabel} onChange={setEditTypicalReelShortLabel} className="text-[13px] text-muted-foreground" />
           </div>
-          <span className="text-[13px] text-foreground">41.1%</span>
+          <EditableVal value={editTypicalViewRate + "%"} onChange={(v) => setEditTypicalViewRate(parseFloat(v) || 0)} className="text-[13px] text-foreground" />
         </div>
       </div>
 
@@ -981,14 +978,14 @@ const ReelInsightsScreen = () => {
       <div className="px-4 py-5">
         <div className="space-y-3">
           {[
-            { label: "Likes", value: fmtNum(likes), setter: setEditLikes },
-            { label: "Shares", value: fmtNum(shares), setter: setEditShares },
-            { label: "Saves", value: fmtNum(saves), setter: setEditSaves },
-            { label: "Comments", value: fmtNum(comments), setter: setEditComments },
+            { label: "Likes", value: likes, displayValue: fmtNum(likes), setter: setEditLikes },
+            { label: "Shares", value: shares, displayValue: fmtNum(shares), setter: setEditShares },
+            { label: "Saves", value: saves, displayValue: fmtNum(saves), setter: setEditSaves },
+            { label: "Comments", value: comments, displayValue: fmtNum(comments), setter: setEditComments },
           ].map((item) => (
             <div key={item.label} className="flex items-center justify-between">
               <span className="text-[15px] text-foreground">{item.label}</span>
-              <EditableVal value={item.value} onChange={(v) => item.setter(parseInt(v) || 0)} className="text-[15px] text-foreground" />
+              <EditableVal value={item.value} displayValue={item.displayValue} onChange={(v) => item.setter(parseInt(v) || 0)} className="text-[15px] text-foreground" />
             </div>
           ))}
         </div>
@@ -1003,11 +1000,11 @@ const ReelInsightsScreen = () => {
             <h3 className="text-[16px] font-bold text-foreground">Profile activity</h3>
             <Info size={14} className="text-muted-foreground" />
           </div>
-          <EditableVal value={fmtNum(follows)} onChange={(v) => setEditFollows(parseInt(v) || 0)} className="text-[16px] font-bold text-foreground" />
+          <EditableVal value={follows} displayValue={fmtNum(follows)} onChange={(v) => setEditFollows(parseInt(v) || 0)} className="text-[16px] font-bold text-foreground" />
         </div>
         <div className="flex items-center justify-between">
           <span className="text-[14px] text-foreground">Follows</span>
-          <EditableVal value={fmtNum(follows)} onChange={(v) => setEditFollows(parseInt(v) || 0)} className="text-[14px] text-foreground" />
+          <EditableVal value={follows} displayValue={fmtNum(follows)} onChange={(v) => setEditFollows(parseInt(v) || 0)} className="text-[14px] text-foreground" />
         </div>
       </div>
 
@@ -1016,7 +1013,7 @@ const ReelInsightsScreen = () => {
       {/* Audience */}
       <div className="px-4 py-5">
         <div className="flex items-center gap-2 mb-4">
-          <h3 className="text-[18px] font-bold text-foreground">Audience</h3>
+          <EditableVal value={editAudienceLabel} onChange={setEditAudienceLabel} className="text-[18px] font-bold text-foreground" />
           <Info size={16} className="text-muted-foreground" />
         </div>
         <div className="flex gap-2 mb-5">
@@ -1043,12 +1040,12 @@ const ReelInsightsScreen = () => {
               { label: "Women", pct: genderFemale, setter: () => {} },
             ].map((g) => (
               <div key={g.label}>
-                <span className="text-[14px] text-foreground block mb-0.5">{g.label}</span>
+                <EditableVal value={g.label} onChange={() => {}} className="text-[14px] text-foreground block mb-0.5" />
                 <div className="flex items-center gap-3">
                   <div className="flex-1 h-[8px] rounded-full bg-secondary/50 overflow-hidden">
                     <div className="h-full pct-bar-dynamic" style={{ width: `${g.pct}%`, background: pctColor(g.pct) }} />
                   </div>
-                  <EditableVal value={g.pct + "%"} onChange={(v) => g.setter && g.setter(Math.min(100, parseFloat(v) || 0))} className="text-[14px] text-foreground w-[48px] text-right" />
+                  <EditableVal value={g.pct} displayValue={g.pct + "%"} onChange={(v) => g.setter && g.setter(Math.min(100, parseFloat(v) || 0))} className="text-[14px] text-foreground w-[48px] text-right" />
                 </div>
               </div>
             ))}
@@ -1059,12 +1056,24 @@ const ReelInsightsScreen = () => {
           <div className="space-y-2">
             {countries.map((c) => (
               <div key={c.name}>
-                <span className="text-[11px] text-foreground block mb-1">{c.name}</span>
+                <EditableVal 
+                  value={c.name} 
+                  onChange={(v) => {
+                    const next = [...editCountries];
+                    const idx = next.findIndex(x => x.name === c.name);
+                    if (idx >= 0) { next[idx].name = v; setEditCountries(next); }
+                  }} 
+                  className="text-[11px] text-foreground block mb-1" 
+                />
                 <div className="flex items-center gap-2">
                   <div className="flex-1 h-[8px] rounded-full bg-secondary/50 overflow-hidden">
                     <div className="h-full pct-bar-dynamic" style={{ width: `${c.pct}%`, background: pctColor(c.pct) }} />
                   </div>
-                  <EditableVal value={c.pct + "%"} onChange={() => {}} className="text-[11px] text-foreground w-[36px] text-right" />
+                  <EditableVal value={c.pct} displayValue={c.pct + "%"} onChange={(v) => {
+                    const next = [...editCountries];
+                    const idx = next.findIndex(x => x.name === c.name);
+                    if (idx >= 0) { next[idx].pct = Math.min(100, parseFloat(v) || 0); setEditCountries(next); }
+                  }} className="text-[11px] text-foreground w-[36px] text-right" />
                 </div>
               </div>
             ))}
@@ -1075,12 +1084,24 @@ const ReelInsightsScreen = () => {
           <div className="space-y-1">
             {ageGroups.map((a) => (
               <div key={a.range}>
-                <span className="text-[14px] text-foreground block mb-0.5">{a.range}</span>
+                <EditableVal 
+                  value={a.range} 
+                  onChange={(v) => {
+                    const next = [...editAgeGroups];
+                    const idx = next.findIndex(x => x.range === a.range);
+                    if (idx >= 0) { next[idx].range = v; setEditAgeGroups(next); }
+                  }} 
+                  className="text-[14px] text-foreground block mb-0.5" 
+                />
                 <div className="flex items-center gap-3">
                   <div className="flex-1 h-[8px] rounded-full bg-secondary/50 overflow-hidden">
                     <div className="h-full pct-bar-dynamic" style={{ width: `${a.pct}%`, background: pctColor(a.pct) }} />
                   </div>
-                  <EditableVal value={a.pct + "%"} onChange={() => {}} className="text-[14px] text-foreground w-[48px] text-right" />
+                  <EditableVal value={a.pct} displayValue={a.pct + "%"} onChange={(v) => {
+                    const next = [...editAgeGroups];
+                    const idx = next.findIndex(x => x.range === a.range);
+                    if (idx >= 0) { next[idx].pct = Math.min(100, parseFloat(v) || 0); setEditAgeGroups(next); }
+                  }} className="text-[14px] text-foreground w-[48px] text-right" />
                 </div>
               </div>
             ))}
@@ -1093,14 +1114,14 @@ const ReelInsightsScreen = () => {
       {/* Monetisation */}
       <div className="px-4 py-5">
         <div className="flex items-center gap-2 mb-4">
-          <h3 className="text-[18px] font-bold text-foreground">Monetisation</h3>
+          <EditableVal value={editMonetisationLabel} onChange={setEditMonetisationLabel} className="text-[18px] font-bold text-foreground" />
           <Info size={16} className="text-muted-foreground" />
         </div>
-        <h4 className="text-[15px] font-bold text-foreground mb-2">Gifts</h4>
+        <EditableVal value={editGiftsLabel} onChange={setEditGiftsLabel} className="text-[15px] font-bold text-foreground mb-2 inline-block" />
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <div className="h-2 w-2 rounded-full bg-[#E040FB]" />
-            <span className="text-[14px] text-foreground">Not monetising</span>
+            <EditableVal value={editNotMonetisingLabel} onChange={setEditNotMonetisingLabel} className="text-[14px] text-foreground" />
           </div>
           <button className="text-[14px] text-[#0095f6] font-medium">Add payment details</button>
         </div>
@@ -1110,11 +1131,11 @@ const ReelInsightsScreen = () => {
 
       {/* Ad Section */}
       <div className="px-4 py-5 pb-10">
-        <h3 className="text-[18px] font-bold text-foreground mb-4">Ad</h3>
+        <EditableVal value={editAdLabel} onChange={setEditAdLabel} className="text-[18px] font-bold text-foreground mb-4 inline-block" />
         <button className="w-full flex items-center justify-between py-1 transition-opacity active:opacity-60">
           <div className="flex items-center gap-3">
             <TrendingUp size={22} className="text-foreground" strokeWidth={2} />
-            <span className="text-[15px] font-medium text-foreground">Boost this Reel</span>
+            <EditableVal value={editBoostLabel} onChange={setEditBoostLabel} className="text-[15px] font-medium text-foreground" />
           </div>
           <ChevronRight size={22} className="text-muted-foreground/60" />
         </button>

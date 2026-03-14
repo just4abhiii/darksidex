@@ -24,14 +24,12 @@ import NotFound from "./pages/NotFound";
 const queryClient = new QueryClient();
 
 const App = () => {
-  const [showSplash, setShowSplash] = useState(true);
+  const [showSplash, setShowSplash] = useState(false);
   const handleSplashFinish = useCallback(() => setShowSplash(false), []);
 
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
-        {showSplash && <SplashScreen onFinish={handleSplashFinish} />}
-        {showSplash && <div className="fixed inset-0 z-[9998] bg-white" />}
         <InstallGate>
           <Toaster />
           <Sonner />

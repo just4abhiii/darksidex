@@ -21,6 +21,7 @@ export interface ReelInsights {
   // Retention
   skipRate: number;
   typicalSkipRate: number;
+  typicalViewRate?: number;
   retentionCurve?: { t: string; pct: number }[];
   typicalRetentionCurve?: { t: string; pct: number }[];
 }
@@ -86,6 +87,7 @@ const defaultInsights = (i: number): ReelInsights => ({
   follows: [0, 5, 12, 0, 35, 8, 20, 1, 10, 15, 3, 22, 6, 30, 4, 12, 18, 2, 14, 8][i] || 0,
   skipRate: [28.2, 32.5, 18.4, 45.1, 15.8, 38.7, 22.3, 41.6, 19.9, 35.4, 27.1, 16.5, 33.8, 12.4, 42.3, 25.6, 20.1, 37.9, 23.7, 30.2][i] ?? 28.2,
   typicalSkipRate: [54.7, 54.7, 54.7, 54.7, 54.7, 54.7, 54.7, 54.7, 54.7, 54.7, 54.7, 54.7, 54.7, 54.7, 54.7, 54.7, 54.7, 54.7, 54.7, 54.7][i] ?? 54.7,
+  typicalViewRate: 41.1,
   retentionCurve: defaultRetentionCurve([28.2, 32.5, 18.4, 45.1, 15.8, 38.7, 22.3, 41.6, 19.9, 35.4, 27.1, 16.5, 33.8, 12.4, 42.3, 25.6, 20.1, 37.9, 23.7, 30.2][i] ?? 28.2),
   viewsOverTime: [
     { day: "23 Jan", thisReel: 0, typical: 0 },

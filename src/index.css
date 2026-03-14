@@ -187,4 +187,58 @@ html, body {
   .page-enter {
     animation: page-enter 0.15s ease-out;
   }
+
+  /* ── Inline Edit Mode ── */
+  @keyframes edit-glow-pulse {
+    0%, 100% { box-shadow: 0 0 4px 1px rgba(224, 64, 251, 0.35); }
+    50% { box-shadow: 0 0 8px 2px rgba(224, 64, 251, 0.55); }
+  }
+  .edit-field-active {
+    background: rgba(224, 64, 251, 0.06);
+    border: 1px solid rgba(224, 64, 251, 0.4);
+    border-radius: 6px;
+    padding: 2px 6px;
+    outline: none;
+    animation: edit-glow-pulse 2s ease-in-out infinite;
+    min-width: 40px;
+    text-align: inherit;
+    transition: all 0.2s ease;
+  }
+  .edit-field-active:focus {
+    box-shadow: 0 0 10px 3px rgba(224, 64, 251, 0.6);
+    border-color: rgba(224, 64, 251, 0.7);
+  }
+
+  /* Edit mode banner shimmer */
+  @keyframes edit-banner-shimmer {
+    0% { background-position: -200% 0; }
+    100% { background-position: 200% 0; }
+  }
+  .edit-mode-banner {
+    background: linear-gradient(90deg, #E040FB 0%, #D500F9 30%, #7C4DFF 60%, #E040FB 100%);
+    background-size: 200% 100%;
+    animation: edit-banner-shimmer 3s linear infinite;
+  }
+
+  /* Save toast slide-up */
+  @keyframes save-toast-in {
+    0% { opacity: 0; transform: translateY(20px) scale(0.95); }
+    100% { opacity: 1; transform: translateY(0) scale(1); }
+  }
+  @keyframes save-toast-out {
+    0% { opacity: 1; transform: translateY(0) scale(1); }
+    100% { opacity: 0; transform: translateY(-10px) scale(0.95); }
+  }
+  .save-toast-enter {
+    animation: save-toast-in 0.3s ease-out forwards;
+  }
+  .save-toast-exit {
+    animation: save-toast-out 0.3s ease-in forwards;
+  }
+
+  /* Percentage-based dynamic bar colors via HSL */
+  .pct-bar-dynamic {
+    border-radius: 9999px;
+    transition: width 0.5s ease, background 0.3s ease;
+  }
 }

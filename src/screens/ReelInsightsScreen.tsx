@@ -1,7 +1,7 @@
 import { useState, useRef, useCallback, useMemo, useEffect } from "react";
 import * as React from "react";
 
-import { ArrowLeft, MoreVertical, Heart, MessageCircle, Send, Bookmark, Repeat2, Info, Pencil, X } from "lucide-react";
+import { ArrowLeft, MoreVertical, Heart, MessageCircle, Send, Bookmark, Repeat2, Info, Pencil, X, TrendingUp, ChevronRight } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
 import { mockAccounts, currentUser } from "@/data/mockData";
 import { loadReelsData, saveReelsData } from "@/data/reelInsightsData";
@@ -1094,6 +1094,20 @@ const ReelInsightsScreen = () => {
           </div>
           <button className="text-[14px] text-[#0095f6] font-medium">Add payment details</button>
         </div>
+      </div>
+
+      <div className="h-[6px] bg-secondary" />
+
+      {/* Ad Section */}
+      <div className="px-4 py-5 pb-10">
+        <h3 className="text-[18px] font-bold text-foreground mb-4">Ad</h3>
+        <button className="w-full flex items-center justify-between py-1 transition-opacity active:opacity-60">
+          <div className="flex items-center gap-3">
+            <TrendingUp size={22} className="text-foreground" strokeWidth={2} />
+            <span className="text-[15px] font-medium text-foreground">Boost this Reel</span>
+          </div>
+          <ChevronRight size={22} className="text-muted-foreground/60" />
+        </button>
       </div>
 
       {/* Edit Modal / Form */}

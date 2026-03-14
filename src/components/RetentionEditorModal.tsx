@@ -116,7 +116,7 @@ const RetentionEditorModal = ({
 
     const handleSave = () => {
         const sorted = [...points].sort((a, b) => a.x - b.x);
-        const numOut = 5;
+        const numOut = 50;
         const result: RetentionPoint[] = [];
         for (let i = 0; i < numOut; i++) {
             const frac = i / (numOut - 1);

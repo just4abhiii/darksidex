@@ -160,19 +160,19 @@ const ReelInsightsScreen = () => {
   const [editRetentionCurve, setEditRetentionCurve] = useState<{ t: string; pct: number }[]>(
     ins?.retentionCurve || [
       { t: "0:00", pct: 100 },
-      { t: "", pct: 72 },
-      { t: "", pct: 35 },
-      { t: "", pct: 12 },
+      { t: "", pct: 28 },
+      { t: "", pct: 15 },
+      { t: "", pct: 8 },
       { t: "0:19", pct: 4 },
     ]
   );
   const [typicalRetentionCurve, setTypicalRetentionCurve] = useState<{ t: string; pct: number }[]>(
     ins?.typicalRetentionCurve || [
       { t: "0:00", pct: 100 },
-      { t: "", pct: 55 },
-      { t: "", pct: 32 },
-      { t: "", pct: 15 },
-      { t: "0:19", pct: 8 },
+      { t: "", pct: 42 },
+      { t: "", pct: 25 },
+      { t: "", pct: 12 },
+      { t: "0:19", pct: 6 },
     ]
   );
   const [retentionEditorOpen, setRetentionEditorOpen] = useState(false);
@@ -838,11 +838,11 @@ const ReelInsightsScreen = () => {
           onMouseLeave={endLongPress}
         >
           <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={editRetentionCurve} margin={{ top: 5, right: 5, left: -5, bottom: 0 }}>
-              <CartesianGrid horizontal={true} vertical={false} stroke="hsl(var(--border))" strokeOpacity={0.3} />
+            <LineChart data={editRetentionCurve} margin={{ top: 5, right: 10, left: -5, bottom: 0 }}>
+              <CartesianGrid horizontal={true} vertical={false} stroke="hsl(var(--border))" strokeOpacity={0.25} />
               <XAxis dataKey="t" fontSize={10} tickLine={false} axisLine={false} tick={{ fill: 'hsl(var(--muted-foreground))' }} />
-              <YAxis fontSize={10} tickLine={false} axisLine={false} width={46} domain={[0, 100]} ticks={[0, 50, 100]} tickFormatter={(v: number) => v === 0 ? '0' : `${v}%`} tick={{ fill: 'hsl(var(--muted-foreground))' }} />
-              <Line type="natural" dataKey="pct" stroke="#E040FB" strokeWidth={3} dot={false} />
+              <YAxis fontSize={10} tickLine={false} axisLine={false} width={42} domain={[0, 100]} ticks={[0, 50, 100]} tickFormatter={(v: number) => v === 0 ? '0' : `${v}%`} tick={{ fill: 'hsl(var(--muted-foreground))' }} />
+              <Line type="linear" dataKey="pct" stroke="#E040FB" strokeWidth={3.5} dot={false} />
             </LineChart>
           </ResponsiveContainer>
         </div>
